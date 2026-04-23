@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
 import { getEffectiveProjectsLimit } from "@/lib/subscription"
 import { PROJECT_LIST_COLUMNS } from "@/lib/project-list-select"
+import { projectCreateBodySchema } from "@/lib/api-schemas/project"
+import { zodErrorJsonResponse } from "@/lib/api-schemas/zod-response"
 
 export const dynamic = "force-dynamic"
 
 // GET /api/projects — list all projects for the authenticated user
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -23,6 +29,7 @@ export async function GET() {
     .order("updated_at", { ascending: false })
 
   if (error) {
+    console.error("[api/projects] GET", error.code ?? "", error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -40,7 +47,10 @@ export async function GET() {
 }
 
 // POST /api/projects — create a new project
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -69,30 +79,39 @@ export async function POST(request: Request) {
     )
   }
 
-  const body = await request.json()
-  const { title, description, genre, characters, location, mood, content, status } = body
-
-  if (!title?.trim()) {
-    return NextResponse.json({ error: "Title is required" }, { status: 400 })
+  let raw: unknown
+  try {
+    raw = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
+
+  const parsed = projectCreateBodySchema.safeParse(raw)
+  if (!parsed.success) {
+    return zodErrorJsonResponse(parsed.error)
+  }
+
+  const b = parsed.data
+  const genre = b.genre?.trim() ? b.genre.trim() : "drama"
 
   const { data, error } = await (supabase
     .from("projects") as any)
     .insert({
       user_id: user.id,
-      title: title.trim(),
-      description: description ?? null,
-      genre: genre ?? "drama",
-      characters: characters ?? null,
-      location: location ?? null,
-      mood: mood ?? null,
-      content: content ?? null,
-      status: status ?? "draft",
+      title: b.title,
+      description: b.description ?? null,
+      genre,
+      characters: b.characters ?? null,
+      location: b.location ?? null,
+      mood: b.mood ?? null,
+      content: b.content ?? null,
+      status: b.status,
     })
     .select(PROJECT_LIST_COLUMNS)
     .single()
 
   if (error) {
+    console.error("[api/projects] POST", error.code ?? "", error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

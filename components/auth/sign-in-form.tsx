@@ -7,7 +7,7 @@ import { useState } from "react"
 import { signInAction } from "@/lib/auth/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ErrorMessage } from "@/components/ui/error-message"
+import { AuthFormError } from "@/components/auth/auth-form-error"
 
 interface SignInFormProps {
   nextPath: string
@@ -50,7 +50,7 @@ export function SignInForm({ nextPath, initialError = null }: SignInFormProps) {
         <p className="mt-2 text-sm text-white/50">Sign in with your email. Sessions stay in secure HTTP-only cookies.</p>
       </div>
 
-      {error ? <ErrorMessage message={error} onDismiss={() => setError(null)} className="mb-6" /> : null}
+      {error ? <AuthFormError message={error} onDismiss={() => setError(null)} className="mb-6" /> : null}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <input type="hidden" name="next" value={nextPath} />

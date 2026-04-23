@@ -7,7 +7,7 @@ import { useState } from "react"
 import { signUpAction } from "@/lib/auth/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ErrorMessage } from "@/components/ui/error-message"
+import { AuthFormError } from "@/components/auth/auth-form-error"
 
 interface SignUpFormProps {
   nextPath: string
@@ -86,7 +86,7 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
         <p className="mt-2 text-sm text-white/50">Email and password only. No social logins — fewer vectors, clearer trust.</p>
       </div>
 
-      {error ? <ErrorMessage message={error} onDismiss={() => setError(null)} className="mb-6" /> : null}
+      {error ? <AuthFormError message={error} onDismiss={() => setError(null)} className="mb-6" /> : null}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <input type="hidden" name="next" value={nextPath} />
@@ -179,6 +179,7 @@ export function SignUpForm({ nextPath }: SignUpFormProps) {
             id="terms"
             name="terms"
             type="checkbox"
+            value="on"
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
             disabled={loading}

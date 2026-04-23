@@ -11,7 +11,7 @@ const personas = [
     title: "Independent Screenwriters",
     description:
       "Stop staring at blank pages. Generate complete scenes in seconds, improve your dialogue, and hit your page count — every single day.",
-    points: ["Unlimited scene generation", "Genre-aware AI formatting", "Dialogue polish in one click"],
+    points: ["AI scene drafting on every plan", "Genre-aware AI formatting", "Dialogue polish in one click"],
     example: "\"Went from 2 pages a day to 10 pages with AI assistance\"",
     author: "Vikram, Screenwriter",
     color: "from-cinematic-orange/30 to-cinematic-orange/5",
@@ -47,7 +47,7 @@ const personas = [
     title: "Production Houses",
     description:
       "Speed up your pre-production pipeline. Evaluate scripts faster, generate scene variations, and streamline your creative workflow.",
-    points: ["Multi-project management", "Team collaboration (Premium)", "API access for integration"],
+    points: ["Multi-project management", "Higher limits on Premium", "Team & API workflows (roadmap)"],
     example: "\"10x faster script development for our writers room\"",
     author: "Rajesh, Producer",
     color: "from-green-500/30 to-green-500/5",

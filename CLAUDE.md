@@ -9,9 +9,39 @@ npm run dev        # Start development server (port 3000)
 npm run build      # Production build with optimizations
 npm run start      # Start production server
 npm run lint       # Run Next.js ESLint
+npm run typecheck  # TypeScript check (tsc --noEmit)
+npm run audit:ci   # npm audit — fails only on critical (see CI workflow)
+npm run loadtest:k6  # k6 smoke test (install k6 separately — see Scale & observability)
 ```
 
 No test runner is configured. There is no `test` script in package.json.
+
+## Scale & observability (~1M requests/day)
+
+**Dashboards to watch**
+
+- **Vercel** — function duration, error rate, concurrent invocations, top routes; correlate cold starts with P99.
+- **Supabase** — database CPU, connections, and slow queries; **Auth** request volume (session refresh and API traffic).
+- **Upstash** — Redis command rate and latency (rate limits + optional subscription plan cache).
+- **Sentry** (optional) — set `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` in [`.env.example`](.env.example); tunnel route `/monitoring` avoids ad-blockers on ingest.
+
+**Baseline load test**
+
+- Install [k6](https://k6.io/docs/get-started/installation/), then: `npm run loadtest:k6` (override `BASE_URL` / optional `COOKIE` for `/api` — see [scripts/loadtest/k6-smoke.js](scripts/loadtest/k6-smoke.js)).
+- Run against production-like env before campaigns; fix regressions if `http_req_failed` or P95 duration crosses thresholds in the script.
+
+**Platform headroom (check before high traffic)**
+
+- **Vercel** — project region aligned with **Upstash** Redis region; function memory and plan limits support peak concurrency (order of 50–200+ short-lived req/s for typical campaign spikes on top of ~12 req/s average for ~1M requests/day).
+- **Supabase** — compute and disk can sustain PostgREST + Auth load; add replicas or larger compute if dashboards show sustained CPU or slow queries.
+- **Upstash** — free/pro tier enough for `ratelimit:*` and `cache:sub:*` key volume; colocate with app region.
+
+**In-app scale hooks**
+
+- **General API** — [lib/api-ip-limit.ts](lib/api-ip-limit.ts) applies 100 req/min per IP (when Redis is configured) to authenticated API routes. AI routes also keep stricter [lib/ai-rate-limits.ts](lib/ai-rate-limits.ts) limits.
+- **Subscription for AI** — [lib/ai-effective-plan.ts](lib/ai-effective-plan.ts) caches `subscriptions` plan/status in Redis (60s TTL) to cut DB reads; [lib/subscription-plan-cache.ts](lib/subscription-plan-cache.ts) keys are invalidated on successful payment in [app/api/razorpay/verify/route.ts](app/api/razorpay/verify/route.ts) and [app/api/razorpay/webhook/route.ts](app/api/razorpay/webhook/route.ts).
+- **Server layouts** — [lib/supabase/server-auth.ts](lib/supabase/server-auth.ts) uses `getSession()` after middleware refresh to avoid a duplicate `getUser()` Auth round-trip on dashboard shell and related pages.
+- **usage_logs** — AI routes still use fire-and-forget inserts. If `usage_logs` write volume becomes a bottleneck, move to a queue (e.g. QStash) or batch workers; do not block the user response.
 
 ## Environment Setup
 
@@ -20,21 +50,23 @@ Copy `.env.example` to `.env.local` and fill in:
 ### Required
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase project credentials
 - `REPLICATE_API_TOKEN` — For Replicate-powered screenplay generation
+- Optional: `REPLICATE_MODEL_FREE` / `REPLICATE_MODEL_PRO` / `REPLICATE_MODEL_PREMIUM` (plus `REPLICATE_MODEL` fallback) — per-plan model routing in `lib/replicate-model.ts`
 - `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — Payment processing
 
 ### For Production Features (required in production)
 - `SUPABASE_SERVICE_ROLE_KEY` — Server-only key for webhook, admin, cron routes
 - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — Redis for distributed rate limiting
 - `RAZORPAY_WEBHOOK_SECRET` — Webhook signature verification (from Razorpay Dashboard → Webhooks)
-- `RESEND_API_KEY` / `RESEND_FROM_EMAIL` — Transactional email (payment confirmation, expiry warnings)
-- `ADMIN_EMAILS` — Comma-separated list of admin email addresses for `/dashboard/admin`
+- `RESEND_API_KEY` / `RESEND_FROM_EMAIL` — Transactional email (payment confirmation, expiry warnings, PDF). **Sign-up verification** is sent by **Supabase Auth**; theme the “Confirm signup” (and related) templates using [docs/supabase-auth-email-templates.md](docs/supabase-auth-email-templates.md) and [emails/](emails/).
+- `ADMIN_HOSTS` — Comma-separated `Host` values allowed to serve `/master-admin` and `/api/master-admin` (e.g. `admin.yourdomain.com,localhost:3000`). If empty, those routes return 404 on every host.
+- **Admin operators** — Rows in `public.master_admin_users` (`user_id` → `auth.users`). Grant with SQL after schema deploy ([supabase/database.sql](supabase/database.sql), [docs/admin-operators.md](docs/admin-operators.md)). Not env-based; `ADMIN_EMAILS` is unused.
 - `CRON_SECRET` — Protects `/api/cron/*` endpoints from unauthorized calls
 
 ### Pricing (env-based, no deploy needed to change)
-- `PRO_MONTHLY_PRICE_PAISE` (default: 199900 = ₹1,999)
-- `PRO_ANNUAL_PRICE_PAISE` (default: 1918800 = ₹1,599×12)
-- `PREMIUM_MONTHLY_PRICE_PAISE` (default: 499900 = ₹4,999)
-- `PREMIUM_ANNUAL_PRICE_PAISE` (default: 4798800 = ₹3,999×12)
+- `PRO_MONTHLY_PRICE_PAISE` (default: 119900 = ₹1,199)
+- `PRO_ANNUAL_PRICE_PAISE` (default: 1151000 = yearly, ~20% off monthly)
+- `PREMIUM_MONTHLY_PRICE_PAISE` (default: 399900 = ₹3,999)
+- `PREMIUM_ANNUAL_PRICE_PAISE` (default: 3839000 = yearly, ~20% off monthly)
 
 ### Optional
 - `ANTHROPIC_API_KEY` — Anthropic-powered movie reference suggestions
@@ -143,6 +175,11 @@ Two layers in [lib/ratelimit.ts](lib/ratelimit.ts):
 | `getPlanRatelimit("pro")` | Per user ID | 50/day | Pro plan |
 | `getPlanRatelimit("premium")` | Per user ID | 200/day | Premium plan |
 
+**Fail-open vs fail-closed**
+
+- **General API IP limit** ([lib/api-ip-limit.ts](lib/api-ip-limit.ts)) — On Upstash/Redis network errors, the limiter **fails open** (allows the request) so a Redis outage does not break every authenticated API route.
+- **AI generation limits** ([lib/ratelimit.ts](lib/ratelimit.ts)) — In **production**, if Redis env vars are missing, AI routes **fail closed** (503) unless `ALLOW_AI_WITHOUT_REDIS=1` (emergency only).
+
 ### Performance-First Development
 
 #### 1. Data Fetching
@@ -180,10 +217,12 @@ const HeavyComponent = dynamic(() => import("./heavy-component"), {
 
 ### Admin Routes
 
-Admin access is gated by `ADMIN_EMAILS` env var (comma-separated list).
+Admin access is gated by `public.master_admin_users` (service-role lookup by `auth.users` id; see [lib/admin-privileges.ts](lib/admin-privileges.ts), [docs/admin-operators.md](docs/admin-operators.md)).
 
 - **Dashboard:** `app/dashboard/admin/page.tsx` — shows users, MRR, plan breakdown, usage, recent payments
 - **Stats API:** `app/api/admin/stats/route.ts` — returns raw stats JSON (uses service role client)
+- **Master Admin (subdomain):** `app/(master-admin)/master-admin/*` — host-gated via `ADMIN_HOSTS` in middleware; operator row in `master_admin_users` + service role for cross-user reads
+- **Master Admin API:** `app/api/master-admin/*` — JSON for overview, users, subscriptions, usage (`Cache-Control: private, no-store`)
 - Both use `createClient(URL, SERVICE_ROLE_KEY)` initialized **inside** the handler (not at module level)
 
 ### Service Role Client Pattern
@@ -252,12 +291,14 @@ Dark cinematic theme — `cinematic.orange` (#ff6b35), `cinematic.blue` (#00d4ff
 
 - `app/(home)/` — Public landing page
 - `app/dashboard/` — Protected project management pages
-- `app/dashboard/admin/` — Admin-only analytics (requires `ADMIN_EMAILS`)
+- `app/dashboard/admin/` — Admin-only analytics (requires `master_admin_users` row)
+- `app/(master-admin)/` — Master Admin shell (requires `master_admin_users` row + host in `ADMIN_HOSTS`)
 - `app/editor/` — Protected screenplay editor
 - `app/auth/callback/` — OAuth redirect handler
 - `app/api/` — All backend logic lives here as serverless route handlers
 - `app/api/razorpay/` — Payment order creation, verification, webhook
 - `app/api/admin/` — Admin stats API (service role)
+- `app/api/master-admin/` — Master Admin JSON APIs (service role)
 - `app/api/cron/` — Scheduled jobs (Vercel Cron)
 
 ## Performance Checklist
@@ -282,6 +323,7 @@ When adding new features, ensure:
 app/
 ├── api/
 │   ├── admin/stats/      # Admin stats API (service role)
+│   ├── master-admin/     # Master Admin JSON APIs (service role)
 │   ├── cron/check-subscriptions/  # Daily expiry cron
 │   ├── generate/         # Screenplay generation (SSE)
 │   ├── generate-next/    # Scene continuation (SSE)
@@ -295,7 +337,7 @@ app/
 │   ├── subscription/     # Subscription reads/updates
 │   └── user/profile/     # Profile CRUD
 ├── dashboard/
-│   ├── admin/            # Admin dashboard (ADMIN_EMAILS gated)
+│   ├── admin/            # Admin dashboard (master_admin_users gated)
 │   ├── projects/
 │   ├── settings/
 │   └── subscription/
@@ -315,11 +357,21 @@ hooks/
 └── ...
 
 lib/
+├── admin-privileges.ts   # master_admin_users + service role; middleware + route checks
+├── admin-host.ts         # ADMIN_HOSTS allowlist for Master Admin paths
+├── admin-stats.ts        # Legacy /dashboard/admin metrics
+├── master-admin-queries.ts # Bounded service-role queries for Master Admin UI/APIs
+├── master-admin-auth.ts  # Server guard for (master-admin) pages
+├── master-admin-api-guard.ts # Host + operator guard for /api/master-admin/*
 ├── data/queries.ts       # Cached data fetching
 ├── email.ts              # Resend email helper
 ├── ratelimit.ts          # Redis rate limiting (IP + per-user plan)
 ├── motion.ts             # Tree-shaken motion exports
 └── supabase/             # Supabase clients
+
+docs/
+├── admin-operators.md    # Grant/revoke operators, ADMIN_HOSTS, troubleshooting
+└── supabase-auth-email-templates.md
 
 supabase/
 └── database.sql          # Complete schema (tables, indexes, RLS, triggers)
@@ -362,14 +414,20 @@ vercel.json               # Cron job schedule (daily 9AM UTC)
 2. Use `useMotionPreference()` to check if animations should run
 3. Provide static fallback for reduced motion
 
+### Granting or revoking admin operators
+
+1. Ensure `master_admin_users` exists ([supabase/database.sql](supabase/database.sql)).
+2. Follow [docs/admin-operators.md](docs/admin-operators.md) for SQL examples, `ADMIN_HOSTS`, and troubleshooting.
+3. Set `SUPABASE_SERVICE_ROLE_KEY`; middleware uses it for `userHasAdminPrivileges`.
+
 ### Updating Prices
 
 Change env vars — no code deploy needed:
 ```
-PRO_MONTHLY_PRICE_PAISE=199900
-PRO_ANNUAL_PRICE_PAISE=1918800
-PREMIUM_MONTHLY_PRICE_PAISE=499900
-PREMIUM_ANNUAL_PRICE_PAISE=4798800
+PRO_MONTHLY_PRICE_PAISE=119900
+PRO_ANNUAL_PRICE_PAISE=1151000
+PREMIUM_MONTHLY_PRICE_PAISE=399900
+PREMIUM_ANNUAL_PRICE_PAISE=3839000
 ```
 UI display prices are still in `components/home-pricing.tsx` and `app/dashboard/subscription/page.tsx`.
 
@@ -382,16 +440,22 @@ UI display prices are still in `components/home-pricing.tsx` and `app/dashboard/
 
 ## Pricing
 
-Pro: ₹1,999/month (yearly: ₹1,599/month)
-Premium: ₹4,999/month (yearly: ₹3,999/month)
+Pro: ₹1,199/month (yearly: ~₹959/month billed annually, default env)
+Premium: ₹3,999/month (yearly: ~₹3,199/month billed annually, default env)
 
 Prices are controlled by:
 - **Display:** `components/home-pricing.tsx`, `app/dashboard/subscription/page.tsx`
 - **Payment amounts:** env vars (`PRO_MONTHLY_PRICE_PAISE`, etc.) with fallback in `app/api/razorpay/create-order/route.ts`
 
-## Recent Changes (March 2026)
+## Recent Changes
 
-### Security & Billing Release
+### April 2026 — Admin operators table
+
+- **`master_admin_users`:** Platform operators (`/dashboard/admin`, `/master-admin`, `/api/master-admin`) are authorized by rows keyed to `auth.users.id`, not `ADMIN_EMAILS`.
+- **Customer metrics:** Master Admin user lists and related aggregates exclude operator ids.
+- **Docs:** [docs/admin-operators.md](docs/admin-operators.md)
+
+### March 2026 — Security & Billing Release
 - **Razorpay Webhook:** Server-side payment confirmation at `/api/razorpay/webhook` — reliable fallback if client disconnects
 - **Payment Idempotency:** Unique constraint on `razorpay_payment_id` prevents double-processing
 - **Annual Plans:** `billing_cycle` column, 365-day period, env-based annual pricing

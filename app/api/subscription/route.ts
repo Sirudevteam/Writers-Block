@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
 
 // Revalidate every 60 seconds
 export const revalidate = 60
 
 // GET /api/subscription — get user's subscription (null if no row yet)
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -35,6 +39,7 @@ export async function GET() {
 
 /**
  * Plan changes must go through Razorpay (verify/webhook). This endpoint is intentionally disabled.
+ * There is no client-writable subscription body to validate here; payment routes own plan updates.
  */
 export async function POST() {
   return NextResponse.json(

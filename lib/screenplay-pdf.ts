@@ -23,7 +23,8 @@ function siteDisplayUrl(siteUrl: string): string {
 export async function buildScreenplayPdfBuffer(
   title: string,
   content: string,
-  siteUrl: string = process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL
+  siteUrl: string = process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL,
+  watermark: boolean = false
 ): Promise<Buffer> {
   const fonts = await getScreenplayPdfFontPaths()
   let fontRegular = "Courier"
@@ -161,6 +162,21 @@ export async function buildScreenplayPdfBuffer(
         width: WIDTH,
         align: "center",
       })
+    }
+
+    if (watermark) {
+      const wRange = doc.bufferedPageRange()
+      for (let i = wRange.start; i < wRange.start + wRange.count; i++) {
+        doc.switchToPage(i)
+        doc.save()
+        doc.opacity(0.07)
+        doc.font("Helvetica-Bold").fontSize(44).fillColor("#999999")
+        const cx = PAGE_W / 2
+        const cy = PAGE_H / 2
+        doc.rotate(-32, { origin: [cx, cy] })
+        doc.text("Writers Block · Free preview", cx - 200, cy, { width: 400, align: "center" })
+        doc.restore()
+      }
     }
 
     doc.end()

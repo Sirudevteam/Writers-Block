@@ -5,8 +5,9 @@ import { NextRequest, NextResponse } from "next/server"
 import Replicate from "replicate"
 import { createClient } from "@/lib/supabase/server"
 import { runAiRateLimits } from "@/lib/ai-rate-limits"
-import { getEffectivePlan } from "@/lib/subscription"
-import { buildTextCompletionInput, getReplicateModel, getStreamOutputText } from "@/lib/replicate-model"
+import { getEffectivePlanForApiUser } from "@/lib/ai-effective-plan"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
+import { buildTextCompletionInput, getReplicateModelForPlan, getStreamOutputText } from "@/lib/replicate-model"
 
 const token = process.env.REPLICATE_API_TOKEN
 
@@ -14,10 +15,11 @@ const replicate = new Replicate({
   auth: token,
 })
 
-const model = getReplicateModel()
-
 export async function POST(req: NextRequest) {
   try {
+    const tooMany = await apiIpLimitOr429(req)
+    if (tooMany) return tooMany
+
     // ── Auth check ────────────────────────────────────────────────────────────
     const supabase = await createClient()
     const {
@@ -28,16 +30,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // ── Subscription check ────────────────────────────────────────────────────
-    const { data: subscription } = await (supabase.from("subscriptions") as any)
-      .select("plan, status")
-      .eq("user_id", user.id)
-      .single()
-
-    const effectivePlan = getEffectivePlan(subscription ?? null)
+    // ── Subscription check (cached) ─────────────────────────────────────────
+    const effectivePlan = await getEffectivePlanForApiUser(supabase, user.id)
     const rate = await runAiRateLimits(req, effectivePlan, user.id)
     if (!rate.ok) return rate.response
     const { planQuota } = rate
+    const model = getReplicateModelForPlan(effectivePlan)
 
     // Check for placeholder token
     const placeholders = [

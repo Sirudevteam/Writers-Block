@@ -36,6 +36,22 @@ export type Database = {
         }
         Relationships: []
       }
+      master_admin_users: {
+        Row: {
+          user_id: string
+          created_at: string
+          note: string | null
+        }
+        Insert: {
+          user_id: string
+          created_at?: string
+          note?: string | null
+        }
+        Update: {
+          note?: string | null
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           id: string
@@ -218,6 +234,7 @@ export type Database = {
 
 // Convenience type aliases
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
+export type MasterAdminUser = Database["public"]["Tables"]["master_admin_users"]["Row"]
 export type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"]
 export type Project = Database["public"]["Tables"]["projects"]["Row"]
 export type Document = Database["public"]["Tables"]["documents"]["Row"]

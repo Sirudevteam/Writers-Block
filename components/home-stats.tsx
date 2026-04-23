@@ -5,9 +5,9 @@ import { useRef, useEffect, useState } from "react"
 
 const stats = [
   { value: 5000, suffix: "+", label: "Screenwriters" },
-  { value: 50000, suffix: "+", label: "Scenes Generated" },
+  { value: 50000, suffix: "+", label: "Scenes generated" },
   { value: 2, suffix: "", label: "Languages — Tamil & English" },
-  { value: 4.9, suffix: " ★", label: "Average Rating", isDecimal: true },
+  { value: 4.9, suffix: " ★", label: "Average rating", isDecimal: true },
 ]
 
 function AnimatedNumber({ value, suffix, isDecimal = false }: { value: number; suffix: string; isDecimal?: boolean }) {

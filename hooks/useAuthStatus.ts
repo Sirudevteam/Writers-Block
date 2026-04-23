@@ -17,6 +17,13 @@ export function useAuthStatus(
   const [loading, setLoading] = useState(initialIsAuthenticated === undefined)
 
   useEffect(() => {
+    if (initialIsAuthenticated !== undefined) {
+      setIsAuthenticated(initialIsAuthenticated)
+      setLoading(false)
+    }
+  }, [initialIsAuthenticated])
+
+  useEffect(() => {
     let isMounted = true
     const supabase = createClient()
 

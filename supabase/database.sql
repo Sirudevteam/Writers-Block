@@ -1,24 +1,24 @@
 -- ============================================================
 -- Writers Block - Complete Database Schema
--- 
--- This file contains the complete database schema including:
--- - Base tables (profiles, subscriptions, projects, documents)
--- - Razorpay payment columns
--- - Storage bucket configuration
--- - Performance indexes
--- - RLS policies
--- - Triggers and functions
 --
--- Run this entire file in your Supabase SQL Editor
+-- Idempotent: safe to re-run in Supabase SQL Editor (adds missing
+-- columns, IF NOT EXISTS indexes/constraints, replaces functions).
+--
+-- Objects: profiles, master_admin_users, subscriptions, projects, documents, usage_logs,
+-- razorpay_payments, storage bucket `documents`, helper functions
+-- (apply_subscription_payment, admin_subscription_group_counts).
 -- ============================================================
 
--- Enable required extensions
+-- =========================
+-- 1) EXTENSIONS
+-- =========================
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm"; -- For full-text search
+-- Reserved for future fuzzy search / pg_trgm indexes on titles, etc.
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
--- ============================================================
--- BASE TABLES
--- ============================================================
+-- =========================
+-- 2) TABLES (dependency order)
+-- =========================
 
 -- profiles: extends auth.users with public display fields
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -31,7 +31,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- subscriptions: one row per user, tracks plan & limits
+-- Platform operators: /master-admin and /dashboard/admin (auth still uses auth.users; privileges are isolated here).
+-- Grant/revoke workflow and env notes: docs/admin-operators.md (repo root).
+-- Grant access: INSERT INTO public.master_admin_users (user_id) VALUES ('<auth.users.id>');
+CREATE TABLE IF NOT EXISTS public.master_admin_users (
+  user_id     UUID        REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  note        TEXT
+);
+
+-- subscriptions: one row per user, plan, Razorpay ids (billing_cycle + expiry added in §2a for legacy compatibility)
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id                    UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id               UUID        REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
@@ -40,14 +49,13 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   status                TEXT        CHECK (status IN ('active', 'cancelled', 'expired')) DEFAULT 'active' NOT NULL,
   current_period_start  TIMESTAMPTZ DEFAULT NOW(),
   current_period_end    TIMESTAMPTZ,
-  -- Razorpay payment tracking
   razorpay_order_id     TEXT,
   razorpay_payment_id   TEXT,
   created_at            TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at            TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- projects: screenplay projects owned by a user
+-- projects: screenplays
 CREATE TABLE IF NOT EXISTS public.projects (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id     UUID        REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -63,7 +71,7 @@ CREATE TABLE IF NOT EXISTS public.projects (
   updated_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- documents: file attachments stored in Supabase Storage
+-- documents: file attachments in Supabase Storage
 CREATE TABLE IF NOT EXISTS public.documents (
   id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id       UUID        REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -75,52 +83,99 @@ CREATE TABLE IF NOT EXISTS public.documents (
   created_at    TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- ============================================================
--- PERFORMANCE INDEXES
--- ============================================================
+-- usage_logs: AI endpoint audit (anon client inserts with JWT; RLS enforces own user_id)
+CREATE TABLE IF NOT EXISTS public.usage_logs (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id     UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
+  endpoint    TEXT        NOT NULL,
+  plan        TEXT        DEFAULT 'free' NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
 
--- Drop old single-column indexes if they exist (replaced by composites)
+-- razorpay_payments: payment ledger; apply_subscription_payment extends subscription
+CREATE TABLE IF NOT EXISTS public.razorpay_payments (
+  id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id             UUID        REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  razorpay_payment_id TEXT        NOT NULL,
+  razorpay_order_id   TEXT        NOT NULL,
+  amount              INTEGER,
+  plan                TEXT        NOT NULL CHECK (plan IN ('pro', 'premium')),
+  billing_cycle       TEXT        NOT NULL CHECK (billing_cycle IN ('monthly', 'annual')),
+  created_at          TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  CONSTRAINT razorpay_payments_payment_id_key UNIQUE (razorpay_payment_id)
+);
+
+-- 2a) Subscriptions: billing + expiry (idempotent; safe on existing DBs)
+ALTER TABLE public.subscriptions
+  ADD COLUMN IF NOT EXISTS billing_cycle TEXT
+  DEFAULT 'monthly'
+  CHECK (billing_cycle IN ('monthly', 'annual'));
+
+-- Unique on razorpay_payment_id (fails if duplicate non-null values exist; NULLs are allowed, multiple NULLs in PG)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'unique_razorpay_payment_id'
+  ) THEN
+    ALTER TABLE public.subscriptions
+      ADD CONSTRAINT unique_razorpay_payment_id UNIQUE (razorpay_payment_id);
+  END IF;
+END $$;
+
+-- Pre-check: SELECT razorpay_payment_id, COUNT(*) FROM public.subscriptions GROUP BY 1 HAVING COUNT(*) > 1;
+
+-- Cron email deduplication; cleared on renewal (verify / webhook)
+ALTER TABLE public.subscriptions
+  ADD COLUMN IF NOT EXISTS expiry_warning_sent_at TIMESTAMPTZ;
+
+-- =========================
+-- 3) INDEXES
+-- ============================
 DROP INDEX IF EXISTS projects_user_id_idx;
 DROP INDEX IF EXISTS projects_updated_at_idx;
 DROP INDEX IF EXISTS documents_user_id_idx;
 DROP INDEX IF EXISTS documents_project_id_idx;
 
--- Composite indexes for common query patterns
--- Primary lookup: user projects sorted by updated_at (most common query)
-CREATE INDEX IF NOT EXISTS projects_user_updated_idx 
+CREATE INDEX IF NOT EXISTS projects_user_updated_idx
   ON public.projects(user_id, updated_at DESC);
 
--- For filtering projects by status
-CREATE INDEX IF NOT EXISTS projects_user_status_idx 
+CREATE INDEX IF NOT EXISTS projects_user_status_idx
   ON public.projects(user_id, status);
 
--- Partial index for active projects (excludes completed, most common filter)
-CREATE INDEX IF NOT EXISTS projects_active_idx 
-  ON public.projects(user_id, updated_at DESC) 
+CREATE INDEX IF NOT EXISTS projects_active_idx
+  ON public.projects(user_id, updated_at DESC)
   WHERE status IN ('draft', 'in_progress');
 
--- Full-text search index for project search
-CREATE INDEX IF NOT EXISTS projects_search_idx 
-  ON public.projects 
+CREATE INDEX IF NOT EXISTS projects_search_idx
+  ON public.projects
   USING gin(to_tsvector('english', title || ' ' || COALESCE(description, '')));
 
--- Subscription lookups
-CREATE INDEX IF NOT EXISTS subscriptions_user_plan_idx 
+CREATE INDEX IF NOT EXISTS subscriptions_user_plan_idx
   ON public.subscriptions(user_id, plan);
 
--- Document lookups by project
-CREATE INDEX IF NOT EXISTS documents_project_lookup_idx 
+CREATE INDEX IF NOT EXISTS documents_project_lookup_idx
   ON public.documents(project_id, created_at DESC);
 
--- Profile lookups by email (for admin/search)
-CREATE INDEX IF NOT EXISTS profiles_email_idx 
+CREATE INDEX IF NOT EXISTS profiles_email_idx
   ON public.profiles(email);
 
--- ============================================================
--- FUNCTIONS & TRIGGERS
--- ============================================================
+CREATE INDEX IF NOT EXISTS usage_logs_user_date_idx
+  ON public.usage_logs(user_id, created_at DESC);
 
--- Auto-update updated_at timestamp
+CREATE INDEX IF NOT EXISTS usage_logs_endpoint_date_idx
+  ON public.usage_logs(endpoint, created_at DESC);
+
+-- Time-range admin / analytics scans on large usage_logs
+CREATE INDEX IF NOT EXISTS usage_logs_created_at_idx
+  ON public.usage_logs(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS razorpay_payments_user_created_idx
+  ON public.razorpay_payments(user_id, created_at DESC);
+
+-- =========================
+-- 4) FUNCTIONS
+-- =========================
+
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -129,23 +184,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create triggers for updated_at (drop first for idempotency)
-DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
-CREATE TRIGGER set_profiles_updated_at
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-
-DROP TRIGGER IF EXISTS set_subscriptions_updated_at ON public.subscriptions;
-CREATE TRIGGER set_subscriptions_updated_at
-  BEFORE UPDATE ON public.subscriptions
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-
-DROP TRIGGER IF EXISTS set_projects_updated_at ON public.projects;
-CREATE TRIGGER set_projects_updated_at
-  BEFORE UPDATE ON public.projects
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-
--- Block inserts when at project cap (defense in depth; API also enforces)
 CREATE OR REPLACE FUNCTION public.enforce_project_limit_before_insert()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -174,12 +212,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS enforce_project_limit_on_insert ON public.projects;
-CREATE TRIGGER enforce_project_limit_on_insert
-  BEFORE INSERT ON public.projects
-  FOR EACH ROW EXECUTE FUNCTION public.enforce_project_limit_before_insert();
-
--- Auto-create profile + free subscription when a new user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -200,206 +232,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Create trigger for new user signup
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- ============================================================
--- ROW LEVEL SECURITY (RLS)
--- ============================================================
-
--- Enable RLS on all tables
-ALTER TABLE public.profiles      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.projects      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.documents     ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies if they exist (for clean recreation)
-DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can view their own subscription" ON public.subscriptions;
-DROP POLICY IF EXISTS "Users can view their own projects" ON public.projects;
-DROP POLICY IF EXISTS "Users can create their own projects" ON public.projects;
-DROP POLICY IF EXISTS "Users can update their own projects" ON public.projects;
-DROP POLICY IF EXISTS "Users can delete their own projects" ON public.projects;
-DROP POLICY IF EXISTS "Users can view their own documents" ON public.documents;
-DROP POLICY IF EXISTS "Users can upload their own documents" ON public.documents;
-DROP POLICY IF EXISTS "Users can delete their own documents" ON public.documents;
-
--- profiles policies
-CREATE POLICY "Users can view their own profile"
-  ON public.profiles FOR SELECT
-  USING (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile"
-  ON public.profiles FOR UPDATE
-  USING (auth.uid() = id);
-
--- subscriptions policies
-CREATE POLICY "Users can view their own subscription"
-  ON public.subscriptions FOR SELECT
-  USING (auth.uid() = user_id);
-
--- projects policies
-CREATE POLICY "Users can view their own projects"
-  ON public.projects FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can create their own projects"
-  ON public.projects FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own projects"
-  ON public.projects FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own projects"
-  ON public.projects FOR DELETE
-  USING (auth.uid() = user_id);
-
--- documents policies
-CREATE POLICY "Users can view their own documents"
-  ON public.documents FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can upload their own documents"
-  ON public.documents FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own documents"
-  ON public.documents FOR DELETE
-  USING (auth.uid() = user_id);
-
--- ============================================================
--- STORAGE BUCKET CONFIGURATION
--- ============================================================
-
--- Create private documents storage bucket
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('documents', 'documents', false)
-ON CONFLICT (id) DO NOTHING;
-
--- Storage RLS policies (drop first for idempotency)
-DROP POLICY IF EXISTS "Users can upload their own documents" ON storage.objects;
-DROP POLICY IF EXISTS "Users can read their own documents" ON storage.objects;
-DROP POLICY IF EXISTS "Users can delete their own documents" ON storage.objects;
-
--- RLS: only owner can upload/read/delete their files
-CREATE POLICY "Users can upload their own documents"
-  ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text);
-
-CREATE POLICY "Users can read their own documents"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text);
-
-CREATE POLICY "Users can delete their own documents"
-  ON storage.objects FOR DELETE
-  TO authenticated
-  USING (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text);
-
--- ============================================================
--- UPDATE STATISTICS
--- ============================================================
-
--- Update table statistics for query planner
-ANALYZE public.profiles;
-ANALYZE public.subscriptions;
-ANALYZE public.projects;
-ANALYZE public.documents;
-
--- ============================================================
--- COMPLETION
--- ============================================================
-
--- ============================================================
--- USAGE LOGS TABLE
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS public.usage_logs (
-  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id     UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
-  endpoint    TEXT        NOT NULL,
-  plan        TEXT        DEFAULT 'free' NOT NULL,
-  created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS usage_logs_user_date_idx
-  ON public.usage_logs(user_id, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS usage_logs_endpoint_date_idx
-  ON public.usage_logs(endpoint, created_at DESC);
-
-ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view own usage" ON public.usage_logs;
-CREATE POLICY "Users can view own usage"
-  ON public.usage_logs FOR SELECT
-  USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Service can insert usage" ON public.usage_logs;
-CREATE POLICY "Service can insert usage"
-  ON public.usage_logs FOR INSERT
-  WITH CHECK (true);
-
--- ============================================================
--- SUBSCRIPTIONS: billing_cycle + idempotency constraint
--- ============================================================
-
--- Add billing_cycle column (monthly vs annual)
-ALTER TABLE public.subscriptions
-  ADD COLUMN IF NOT EXISTS billing_cycle TEXT
-  CHECK (billing_cycle IN ('monthly', 'annual')) DEFAULT 'monthly';
-
--- Unique constraint for payment idempotency (prevents double-processing)
--- Note: This will fail if duplicate payment IDs already exist in the table.
--- Run: SELECT razorpay_payment_id, COUNT(*) FROM subscriptions GROUP BY 1 HAVING COUNT(*) > 1;
--- to check before applying.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'unique_razorpay_payment_id'
-  ) THEN
-    ALTER TABLE public.subscriptions
-      ADD CONSTRAINT unique_razorpay_payment_id UNIQUE (razorpay_payment_id);
-  END IF;
-END $$;
-
--- Expiry warning email deduplication (cron sets this; cleared on renewal via verify/webhook)
-ALTER TABLE public.subscriptions
-  ADD COLUMN IF NOT EXISTS expiry_warning_sent_at TIMESTAMPTZ;
-
--- ============================================================
--- RAZORPAY PAYMENT LEDGER + ATOMIC APPLY (idempotency, stacked periods)
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS public.razorpay_payments (
-  id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id             UUID        REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  razorpay_payment_id TEXT        NOT NULL,
-  razorpay_order_id   TEXT        NOT NULL,
-  amount              INTEGER,
-  plan                TEXT        NOT NULL CHECK (plan IN ('pro', 'premium')),
-  billing_cycle       TEXT        NOT NULL CHECK (billing_cycle IN ('monthly', 'annual')),
-  created_at          TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  CONSTRAINT razorpay_payments_payment_id_key UNIQUE (razorpay_payment_id)
-);
-
-CREATE INDEX IF NOT EXISTS razorpay_payments_user_created_idx
-  ON public.razorpay_payments(user_id, created_at DESC);
-
-ALTER TABLE public.razorpay_payments ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Users can view own razorpay payments" ON public.razorpay_payments;
-CREATE POLICY "Users can view own razorpay payments"
-  ON public.razorpay_payments FOR SELECT
-  USING (auth.uid() = user_id);
-
--- Atomically record payment (unique payment_id) and extend subscription from max(existing_end, now).
 CREATE OR REPLACE FUNCTION public.apply_subscription_payment(
   p_user_id UUID,
   p_payment_id TEXT,
@@ -438,7 +270,7 @@ BEGIN
   END IF;
 
   v_days := CASE WHEN p_billing_cycle = 'annual' THEN 365 ELSE 30 END;
-  v_projects_limit := CASE p_plan WHEN 'pro' THEN 25 WHEN 'premium' THEN 100 ELSE 5 END;
+  v_projects_limit := CASE p_plan WHEN 'pro' THEN 25 WHEN 'premium' THEN 999999 ELSE 5 END;
 
   SELECT current_period_end INTO v_existing_end
   FROM public.subscriptions
@@ -477,10 +309,6 @@ $$;
 REVOKE ALL ON FUNCTION public.apply_subscription_payment(UUID, TEXT, TEXT, TEXT, TEXT, INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.apply_subscription_payment(UUID, TEXT, TEXT, TEXT, TEXT, INTEGER) TO service_role;
 
--- ============================================================
--- ADMIN: O(1) subscription aggregates (avoids full table fetch)
--- ============================================================
-
 CREATE OR REPLACE FUNCTION public.admin_subscription_group_counts()
 RETURNS JSONB
 LANGUAGE sql
@@ -513,11 +341,149 @@ $$;
 REVOKE ALL ON FUNCTION public.admin_subscription_group_counts() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.admin_subscription_group_counts() TO service_role;
 
--- ============================================================
--- UPDATE STATISTICS (append)
--- ============================================================
+-- =========================
+-- 5) TRIGGERS
+-- =========================
 
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
+CREATE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS set_subscriptions_updated_at ON public.subscriptions;
+CREATE TRIGGER set_subscriptions_updated_at
+  BEFORE UPDATE ON public.subscriptions
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS set_projects_updated_at ON public.projects;
+CREATE TRIGGER set_projects_updated_at
+  BEFORE UPDATE ON public.projects
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS enforce_project_limit_on_insert ON public.projects;
+CREATE TRIGGER enforce_project_limit_on_insert
+  BEFORE INSERT ON public.projects
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_project_limit_before_insert();
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =========================
+-- 6) ROW LEVEL SECURITY
+-- =========================
+
+ALTER TABLE public.profiles         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.master_admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscriptions    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.documents        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.usage_logs      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.razorpay_payments ENABLE ROW LEVEL SECURITY;
+
+-- profiles
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+CREATE POLICY "Users can view their own profile"
+  ON public.profiles FOR SELECT
+  USING (auth.uid() = id);
+CREATE POLICY "Users can update their own profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+-- master_admin_users: no client policies — only service_role (bypasses RLS) may read/write.
+
+-- subscriptions
+DROP POLICY IF EXISTS "Users can view their own subscription" ON public.subscriptions;
+CREATE POLICY "Users can view their own subscription"
+  ON public.subscriptions FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- projects
+DROP POLICY IF EXISTS "Users can view their own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can create their own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can update their own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can delete their own projects" ON public.projects;
+CREATE POLICY "Users can view their own projects"
+  ON public.projects FOR SELECT
+  USING (auth.uid() = user_id);
+CREATE POLICY "Users can create their own projects"
+  ON public.projects FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own projects"
+  ON public.projects FOR UPDATE
+  USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own projects"
+  ON public.projects FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- documents
+DROP POLICY IF EXISTS "Users can view their own documents" ON public.documents;
+DROP POLICY IF EXISTS "Users can upload their own documents" ON public.documents;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON public.documents;
+CREATE POLICY "Users can view their own documents"
+  ON public.documents FOR SELECT
+  USING (auth.uid() = user_id);
+CREATE POLICY "Users can upload their own documents"
+  ON public.documents FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own documents"
+  ON public.documents FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- usage_logs: users read own rows; inserts must be their own user_id (no spoofing)
+DROP POLICY IF EXISTS "Users can view own usage" ON public.usage_logs;
+DROP POLICY IF EXISTS "Service can insert usage" ON public.usage_logs;
+DROP POLICY IF EXISTS "Users can insert own usage logs" ON public.usage_logs;
+CREATE POLICY "Users can view own usage"
+  ON public.usage_logs FOR SELECT
+  USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own usage logs"
+  ON public.usage_logs FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- razorpay_payments
+DROP POLICY IF EXISTS "Users can view own razorpay payments" ON public.razorpay_payments;
+CREATE POLICY "Users can view own razorpay payments"
+  ON public.razorpay_payments FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- =========================
+-- 7) STORAGE
+-- =========================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('documents', 'documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Users can upload their own documents" ON storage.objects;
+DROP POLICY IF EXISTS "Users can read their own documents" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON storage.objects;
+
+CREATE POLICY "Users can upload their own documents"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can read their own documents"
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can delete their own documents"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (bucket_id = 'documents' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- =========================
+-- 8) STATISTICS
+-- =========================
+ANALYZE public.profiles;
+ANALYZE public.master_admin_users;
+ANALYZE public.subscriptions;
+ANALYZE public.projects;
+ANALYZE public.documents;
 ANALYZE public.usage_logs;
 ANALYZE public.razorpay_payments;
 
-SELECT 'Database schema created successfully!' as status;
+SELECT 'Database schema created successfully!' AS status;

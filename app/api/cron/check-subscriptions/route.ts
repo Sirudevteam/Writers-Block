@@ -20,18 +20,43 @@ import { PLAN_LIMITS } from "@/types/project"
 // Never statically render — this route requires live DB access
 export const dynamic = "force-dynamic"
 
-export async function GET(req: NextRequest) {
-  const adminSupabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+function isProductionRuntime(): boolean {
+  return (
+    process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production"
   )
-  // Validate cron secret
-  const authHeader = req.headers.get("authorization")
-  const cronSecret = process.env.CRON_SECRET
+}
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get("authorization")
+  const cronSecret = process.env.CRON_SECRET?.trim()
+
+  if (isProductionRuntime()) {
+    if (!cronSecret) {
+      return NextResponse.json(
+        {
+          error:
+            "Cron is not configured: set CRON_SECRET in the deployment environment.",
+        },
+        { status: 503 }
+      )
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+  } else if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    return NextResponse.json(
+      { error: "Server misconfiguration: missing Supabase service credentials." },
+      { status: 503 }
+    )
+  }
+
+  const adminSupabase = createClient(url, serviceKey)
 
   const now = new Date()
 

@@ -25,6 +25,7 @@ import {
   FolderOpen,
   FileText,
   RefreshCw,
+  Wand2,
 } from "lucide-react"
 import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
@@ -39,7 +40,16 @@ import { ShotSuggestions } from "@/components/shot-suggestions"
 import { AutoSaveStatus, AutoSaveStatusCompact } from "@/components/auto-save-status"
 import { getAutoSavedContent, clearAutoSavedContent } from "@/hooks/useAutoSave"
 import { cn } from "@/lib/utils"
+import { getEffectivePlan } from "@/lib/subscription"
+import { useUser } from "@/hooks/useUser"
 import type { Project } from "@/types/database"
+
+const STYLE_REWRITE_OPTIONS = [
+  { id: "mass_action", label: "Mass / commercial" },
+  { id: "snappy_dialogue", label: "Snappy dialogue" },
+  { id: "emotional_lyrical", label: "Emotional, lyrical" },
+  { id: "realistic_grounded", label: "Grounded / realistic" },
+] as const
 
 // Wrapper component for Suspense
 function EditorPageWrapper() {
@@ -67,6 +77,10 @@ function EditorPageSkeleton() {
 function EditorPage() {
   const searchParams = useSearchParams()
   const projectId = searchParams.get("project")
+  const { subscription, loading: subscriptionLoading } = useUser()
+  const effectivePlan = getEffectivePlan(subscription)
+  const exportPrintWatermark = !subscriptionLoading && effectivePlan === "free"
+  const canStyleRewrite = effectivePlan === "pro" || effectivePlan === "premium"
 
   const {
     generatedText,
@@ -94,6 +108,8 @@ function EditorPage() {
   const [showRestorePrompt, setShowRestorePrompt] = useState(false)
   const [autoSavedData, setAutoSavedData] = useState<{ content: string; timestamp: string } | null>(null)
   const [hasGeneratedReferences, setHasGeneratedReferences] = useState(false)
+  const [styleRewriteId, setStyleRewriteId] = useState<string>("mass_action")
+  const [isRewriting, setIsRewriting] = useState(false)
   const lastConfigRef = useRef<SceneConfig | null>(null)
 
   // Load existing project on mount
@@ -218,6 +234,56 @@ function EditorPage() {
     setIsImproving(false)
   }, [generatedText, isImproving, setGeneratedText])
 
+  const handleStyleRewrite = useCallback(async () => {
+    if (!generatedText || isRewriting || !canStyleRewrite) return
+    setIsRewriting(true)
+    let rewritten = ""
+    try {
+      const res = await fetch("/api/rewrite-style", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ screenplay: generatedText, styleId: styleRewriteId }),
+      })
+      if (res.status === 403) {
+        setIsRewriting(false)
+        return
+      }
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+      if (!reader) {
+        setIsRewriting(false)
+        return
+      }
+      let buffer = ""
+      let streamDone = false
+      while (!streamDone) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n\n")
+        buffer = lines.pop() || ""
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.done) {
+                streamDone = true
+                break
+              }
+              if (data.content) rewritten += data.content
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      }
+      if (rewritten.trim()) setGeneratedText(rewritten)
+    } catch {
+      /* network */
+    }
+    setIsRewriting(false)
+  }, [generatedText, isRewriting, canStyleRewrite, styleRewriteId, setGeneratedText])
+
   const handleGenerateNextScene = useCallback(async () => {
     if (!generatedText || isContinuing) return
     setIsContinuing(true)
@@ -298,10 +364,8 @@ function EditorPage() {
         />
       </div>
 
-      <Navbar initialIsAuthenticated />
-
       {/* Main Editor Area */}
-      <div className="pt-16 h-screen relative z-10 flex flex-col">
+      <div className="h-screen relative z-10 flex flex-col">
         {/* Header */}
         <div className="h-14 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl flex items-center px-4 lg:px-6">
           <div className="flex items-center gap-3">
@@ -455,6 +519,43 @@ function EditorPage() {
                     {isImproving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
                     <span className="hidden md:inline">Improve</span>
                   </Button>
+                  {canStyleRewrite ? (
+                    <>
+                      <label className="sr-only" htmlFor="style-rewrite-preset">
+                        Style rewrite preset
+                      </label>
+                      <select
+                        id="style-rewrite-preset"
+                        value={styleRewriteId}
+                        onChange={(e) => setStyleRewriteId(e.target.value)}
+                        className="h-8 max-w-[min(42vw,9rem)] rounded-md border border-white/10 bg-[#141414] text-[10px] sm:text-xs text-white/90 px-1.5"
+                      >
+                        {STYLE_REWRITE_OPTIONS.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isRewriting}
+                        onClick={handleStyleRewrite}
+                        title="Rewrite with a style preset (Pro & Premium)"
+                        className="h-8 text-xs gap-1 text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10 px-1.5 lg:px-2"
+                      >
+                        {isRewriting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                        <span className="hidden md:inline">Style</span>
+                      </Button>
+                    </>
+                  ) : (
+                    <Link
+                      href="/dashboard/subscription"
+                      className="hidden sm:inline-flex h-8 items-center rounded-md border border-dashed border-white/15 px-2 text-[10px] text-white/50 hover:text-cinematic-orange hover:border-cinematic-orange/40"
+                    >
+                      Style: Pro+
+                    </Link>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -489,6 +590,7 @@ function EditorPage() {
                   onContentChange={setGeneratedText}
                   title={project?.title || "Untitled Screenplay"}
                   projectId={savedProjectId ?? project?.id ?? null}
+                  exportPrintWatermark={exportPrintWatermark}
                 />
               </div>
             </div>

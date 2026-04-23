@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
 import { buildScreenplayPdfBuffer } from "@/lib/screenplay-pdf"
 import { sendScreenplayPdfEmail } from "@/lib/email"
-import { getApiRatelimit, getClientIP } from "@/lib/ratelimit"
+import { getEffectivePlan } from "@/lib/subscription"
+import type { Subscription } from "@/types/database"
 
 export const dynamic = "force-dynamic"
 
@@ -12,6 +14,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tooMany = await apiIpLimitOr429(req)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -19,14 +24,6 @@ export async function POST(
 
   if (!user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const ipResult = await getApiRatelimit().limit(getClientIP(req))
-  if (!ipResult.success) {
-    return NextResponse.json(
-      { error: "Too many requests. Try again shortly." },
-      { status: 429 }
-    )
   }
 
   let bodyContent: string | undefined
@@ -54,6 +51,14 @@ export async function POST(
     return NextResponse.json({ error: "Project not found" }, { status: 404 })
   }
 
+  const { data: subRow } = await supabase
+    .from("subscriptions")
+    .select("plan, status")
+    .eq("user_id", user.id)
+    .maybeSingle()
+  const plan = getEffectivePlan(subRow as Pick<Subscription, "plan" | "status"> | null)
+  const watermark = plan === "free"
+
   const content = (bodyContent ?? project.content ?? "").trim()
   if (!content) {
     return NextResponse.json(
@@ -65,7 +70,7 @@ export async function POST(
   const title = project.title?.trim() || "Untitled Screenplay"
 
   try {
-    const pdfBuffer = await buildScreenplayPdfBuffer(title, content)
+    const pdfBuffer = await buildScreenplayPdfBuffer(title, content, undefined, watermark)
     const sent = await sendScreenplayPdfEmail(user.email, title, pdfBuffer)
 
     if (!sent) {

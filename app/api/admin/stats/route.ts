@@ -1,29 +1,34 @@
 /**
  * Admin Stats API
- * Protected by ADMIN_EMAILS environment variable.
+ * Protected by public.master_admin_users (service role check).
  * Returns platform metrics: users, subscriptions, revenue, usage.
  */
 
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
-import { isAdminEmail } from "@/lib/admin"
+import { userHasAdminPrivileges } from "@/lib/admin-privileges"
 import { computeAdminStats } from "@/lib/admin-stats"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user?.email) {
+  if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  if (!isAdminEmail(user.email)) {
+  // 403 (not 404) for non-admins: explicit for API clients; page/middleware use 404 to avoid route discovery
+  if (!(await userHasAdminPrivileges(user.id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

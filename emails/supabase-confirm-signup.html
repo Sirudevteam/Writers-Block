@@ -1,0 +1,66 @@
+<!--
+  Supabase Dashboard → Authentication → Email Templates → Confirm signup
+
+  Suggested subject: Confirm your email — Writers Block
+
+  Paste the entire contents below (from <!DOCTYPE through </html>) into the template body.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width" />
+  <title>Confirm your email</title>
+</head>
+<body style="margin:0; padding:0; background:#060605; -webkit-text-size-adjust:100%;">
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">Verify your Writers Block account to start writing.</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#060605;">
+    <tr>
+      <td align="center" style="padding:32px 16px 48px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px; border:1px solid rgba(255,255,255,0.08); border-radius:16px; background:#0c0c0b; overflow:hidden;">
+          <tr>
+            <td style="padding:28px 28px 20px 28px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.08);">
+              <p style="margin:0; font-size:20px; font-weight:700; letter-spacing:-0.02em; color:#ff6b35; font-family:Georgia, 'Space Grotesk', system-ui, sans-serif;">Writers Block</p>
+              <p style="margin:8px 0 0 0; font-size:11px; text-transform:uppercase; letter-spacing:0.18em; color:rgba(255,255,255,0.55); font-family:ui-monospace,monospace;">Screenplay &middot; AI</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 8px 28px; color:#e8e8e6; font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6;">
+              <h1 style="margin:0 0 16px 0; font-size:22px; font-weight:700; line-height:1.25; color:#ffffff;">Confirm your email</h1>
+              <p style="margin:0 0 12px 0;">You&apos;re almost there. We received a request to create a <strong style="color:#ffffff;">Writers Block</strong> account for:</p>
+              <p style="margin:0 0 20px 0; font-size:14px; color:#00d4ff; word-break:break-all;">{{ .Email }}</p>
+              <p style="margin:0; color:rgba(255,255,255,0.7);">Tap the button below to verify your email and finish signing up. This link expires after a short time for your security.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 28px 28px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="border-radius:12px; background:linear-gradient(135deg, #ff6b35 0%, #c94a20 100%);">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block; padding:14px 28px; font-size:15px; font-weight:700; color:#0a0a0a; text-decoration:none; font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif; border-radius:12px;">Verify email &amp; continue</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 28px 28px 28px;">
+              <p style="margin:0 0 10px 0; font-size:12px; line-height:1.5; color:rgba(255,255,255,0.55);">If the button doesn&apos;t work, copy and paste this URL into your browser:</p>
+              <p style="margin:0 0 12px 0; font-size:11px; line-height:1.4; word-break:break-all; color:rgba(255,255,255,0.38);">{{ .ConfirmationURL }}</p>
+              <p style="margin:0 0 8px 0; font-size:12px; line-height:1.5; color:rgba(255,255,255,0.38);">If you didn&apos;t create an account, you can ignore this email.</p>
+              <p style="margin:0; font-size:12px; color:rgba(255,255,255,0.55);">&mdash; The Writers Block team</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 28px; background:rgba(255,255,255,0.04); border-top:1px solid rgba(255,255,255,0.08); text-align:center;">
+              <p style="margin:0; font-size:11px; color:rgba(255,255,255,0.38);">
+                <span style="color:#00d4ff;">W</span>riters Block &middot; <a href="{{ .SiteURL }}" style="color:rgba(255,255,255,0.55); text-decoration:underline;">{{ .SiteURL }}</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

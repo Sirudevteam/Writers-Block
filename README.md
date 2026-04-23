@@ -50,7 +50,8 @@ All streaming screenplay endpoints use Replicate. The current default model is `
 - Project list and project detail flows
 - Subscription status and upgrade surface
 - Settings and profile management
-- Admin dashboard for privileged users listed in `ADMIN_EMAILS`
+- Admin dashboard for users granted in `public.master_admin_users`
+- **Master Admin** (optional subdomain): deeper metrics and tables at `/master-admin` when the request `Host` is listed in `ADMIN_HOSTS` (see [Master Admin (subdomain)](#master-admin-subdomain))
 
 ### Screenplay Editor
 
@@ -90,6 +91,7 @@ Browser
 - AI endpoints apply both IP-based and per-user daily limits.
 - Usage events are logged to `usage_logs`.
 - Admin, webhook, and cron handlers use the Supabase service role inside the handler, not at module scope.
+- **Operator privileges** are stored in `public.master_admin_users` (see [docs/admin-operators.md](docs/admin-operators.md)), not in env email lists.
 
 ## Environment Variables
 
@@ -115,8 +117,10 @@ UPSTASH_REDIS_REST_TOKEN=...
 RAZORPAY_WEBHOOK_SECRET=...
 RESEND_API_KEY=...
 RESEND_FROM_EMAIL=...
-ADMIN_EMAILS=admin@example.com
 CRON_SECRET=...
+# Master Admin: comma-separated hosts that may serve /master-admin (e.g. admin.yourdomain.com,localhost:3000)
+ADMIN_HOSTS=localhost:3000
+# Grant operators in SQL: INSERT INTO public.master_admin_users (user_id) VALUES ('<auth.users uuid>');
 ```
 
 ### Optional Or Feature-Specific
@@ -137,10 +141,10 @@ DEBUG=false
 ### Pricing Configuration
 
 ```bash
-PRO_MONTHLY_PRICE_PAISE=199900
-PRO_ANNUAL_PRICE_PAISE=1918800
-PREMIUM_MONTHLY_PRICE_PAISE=499900
-PREMIUM_ANNUAL_PRICE_PAISE=4798800
+PRO_MONTHLY_PRICE_PAISE=119900
+PRO_ANNUAL_PRICE_PAISE=1151000
+PREMIUM_MONTHLY_PRICE_PAISE=399900
+PREMIUM_ANNUAL_PRICE_PAISE=3839000
 ```
 
 ## Getting Started
@@ -190,6 +194,7 @@ The schema source of truth is `supabase/database.sql`.
 It defines:
 
 - `profiles`
+- `master_admin_users` (platform operators; isolated from customer analytics lists)
 - `subscriptions`
 - `projects`
 - `documents`
@@ -200,11 +205,35 @@ It defines:
 
 Apply the SQL in the Supabase SQL Editor for your project.
 
+## Admin operators and Master Admin
+
+**Full guide:** [docs/admin-operators.md](docs/admin-operators.md)
+
+Summary:
+
+1. **`public.master_admin_users`** — one row per operator (`user_id` = `auth.users.id`). Grant with SQL after auth users exist; **`ADMIN_EMAILS` is not used**.
+2. **`SUPABASE_SERVICE_ROLE_KEY`** — required so middleware and routes can verify membership.
+3. **`ADMIN_HOSTS`** — comma-separated allowed `Host` values for **`/master-admin`** and **`/api/master-admin`** only. Empty = 404 on those routes everywhere. Local dev typically includes `localhost:3000` (and `127.0.0.1:3000` if you use that origin).
+4. **`/dashboard/admin`** uses the same DB operator check but is **not** host-gated.
+
+Master Admin is a **separate surface** from the marketing site: it lives under `/master-admin` and is only reachable when the browser **`Host`** matches **`ADMIN_HOSTS`**. If `ADMIN_HOSTS` is empty, those routes return **404** on every host (fail closed).
+
+### Deployment checklist (Vercel + DNS)
+
+1. Add your admin hostname to the Vercel project (e.g. **Settings → Domains**): `admin.yourdomain.com`.
+2. Create a DNS `CNAME` (or `A`/`ALIAS` as Vercel instructs) so `admin.yourdomain.com` points to the deployment.
+3. Set **`ADMIN_HOSTS`** in Vercel to that hostname exactly as clients send it (usually `admin.yourdomain.com` without port).
+4. **`INSERT` your operator `user_id`(s) into `public.master_admin_users`** (see [docs/admin-operators.md](docs/admin-operators.md)).
+5. Open `https://admin.yourdomain.com/master-admin` after signing in (session cookies are scoped to that host on first visit; sign in on the admin host or rely on your auth cookie domain if you configure it).
+
+Do not link Master Admin from the public homepage unless you intend to expose the URL.
+
 ## API Surface
 
 Current top-level API groups:
 
 - `app/api/admin`
+- `app/api/master-admin`
 - `app/api/cron`
 - `app/api/documents`
 - `app/api/generate`
@@ -225,6 +254,7 @@ app/
   api/                   Route handlers
   auth/                  Auth callback flow
   dashboard/             Protected app pages
+  (master-admin)/        Master Admin shell (host-gated via ADMIN_HOSTS)
   editor/                Screenplay editor page
   signin/ signup/        Auth screens
 
@@ -238,15 +268,22 @@ hooks/
   useUser.ts
 
 lib/
-  ai-rate-limits.ts
+  admin-privileges.ts   # Operator check (master_admin_users + service role)
   admin-stats.ts
+  admin-host.ts         # ADMIN_HOSTS parsing for Master Admin
+  ai-rate-limits.ts
   email.ts
+  master-admin-queries.ts
   ratelimit.ts
   replicate-model.ts
   screenplay-pdf.ts
   screenplay-print-html.ts
   subscription.ts
   supabase/
+
+docs/
+  admin-operators.md
+  supabase-auth-email-templates.md
 
 supabase/
   database.sql
@@ -283,7 +320,7 @@ Recommended target: Vercel.
 - Apply `supabase/database.sql`.
 - Configure Razorpay webhook to `/api/razorpay/webhook`.
 - Configure Resend sender domain if emailing PDFs or billing notifications.
-- Set `ADMIN_EMAILS` before using admin routes.
+- Grant at least one row in `master_admin_users` before using admin routes.
 - Confirm `CRON_SECRET` is present for cron endpoints.
 - Run `npm run build` before deployment.
 
@@ -291,6 +328,7 @@ Recommended target: Vercel.
 
 - `UX_AUDIT_REPORT.md` is a point-in-time product audit, not a live source of truth for implementation details.
 - `CLAUDE.md` is maintainer guidance for code agents and has been aligned with the current stack.
+- `docs/admin-operators.md` describes `master_admin_users`, `ADMIN_HOSTS`, and troubleshooting for admin surfaces.
 
 ## License
 

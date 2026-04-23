@@ -6,7 +6,7 @@
 
 ## Summary
 
-This file is intentionally kept as an audit artifact rather than a live implementation spec. The README and `.env.example` should be treated as the source of truth for setup and architecture. This report captures the current UX direction, the improvements already shipped, and the highest-value product gaps that remain.
+This file is intentionally kept as an audit artifact rather than a live implementation spec. The README, `.env.example`, and [docs/admin-operators.md](docs/admin-operators.md) should be treated as the source of truth for setup, architecture, and platform operator access. This report captures the current UX direction, the improvements already shipped, and the highest-value product gaps that remain.
 
 ## Confirmed Strengths
 

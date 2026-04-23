@@ -4,6 +4,8 @@
  * Set RESEND_API_KEY and RESEND_FROM_EMAIL in your environment.
  */
 
+import { getPublicSiteOrigin, writersBlockEmailDocument } from "@/lib/email-theme"
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "noreply@writersblock.app"
 const APP_NAME = "Writers Block"
@@ -80,6 +82,7 @@ export async function sendPaymentConfirmation(
   expiryDate: Date,
   billingCycle: "monthly" | "annual"
 ): Promise<void> {
+  const site = getPublicSiteOrigin()
   const amount = `₹${(amountPaise / 100).toLocaleString("en-IN")}`
   const planDisplay = plan.charAt(0).toUpperCase() + plan.slice(1)
   const cycleDisplay = billingCycle === "annual" ? "Annual" : "Monthly"
@@ -89,41 +92,33 @@ export async function sendPaymentConfirmation(
     year: "numeric",
   })
 
+  const bodyHtml = `
+    <p style="margin:0 0 16px 0;">Thank you for subscribing! Your <strong style="color:#ffffff;">${escapeHtml(planDisplay)}</strong> plan is now active.</p>
+    <table role="presentation" width="100%" style="border-collapse:collapse; margin:0; font-size:14px;">
+      <tr>
+        <td style="padding:10px 0; color:rgba(255,255,255,0.55); border-bottom:1px solid rgba(255,255,255,0.08);">Plan</td>
+        <td style="padding:10px 0; text-align:right; font-weight:600; color:#ffffff; border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtml(planDisplay)} (${escapeHtml(cycleDisplay)})</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0; color:rgba(255,255,255,0.55); border-bottom:1px solid rgba(255,255,255,0.08);">Amount paid</td>
+        <td style="padding:10px 0; text-align:right; color:#e8e8e6; border-bottom:1px solid rgba(255,255,255,0.08);">${amount}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0; color:rgba(255,255,255,0.55);">Valid until</td>
+        <td style="padding:10px 0; text-align:right; color:#e8e8e6;">${escapeHtml(expiry)}</td>
+      </tr>
+    </table>`
+
   await sendEmail({
     to: email,
     subject: `Payment Confirmed — ${planDisplay} Plan Activated`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
-        <div style="background:#0a0a0a;padding:24px;text-align:center;">
-          <h1 style="color:#ff6b35;margin:0;font-size:24px;">Writers Block</h1>
-        </div>
-        <div style="padding:32px 24px;">
-          <h2 style="margin-top:0;">Payment Confirmed ✓</h2>
-          <p>Thank you for subscribing! Your <strong>${planDisplay} Plan</strong> is now active.</p>
-          <table style="width:100%;border-collapse:collapse;margin:24px 0;">
-            <tr>
-              <td style="padding:8px 0;color:#666;">Plan</td>
-              <td style="padding:8px 0;text-align:right;font-weight:bold;">${planDisplay} (${cycleDisplay})</td>
-            </tr>
-            <tr>
-              <td style="padding:8px 0;color:#666;">Amount Paid</td>
-              <td style="padding:8px 0;text-align:right;">${amount}</td>
-            </tr>
-            <tr>
-              <td style="padding:8px 0;color:#666;">Valid Until</td>
-              <td style="padding:8px 0;text-align:right;">${expiry}</td>
-            </tr>
-          </table>
-          <a href="https://writersblock.app/dashboard"
-             style="display:inline-block;background:#ff6b35;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">
-            Go to Dashboard
-          </a>
-        </div>
-        <div style="padding:16px 24px;background:#f5f5f5;font-size:12px;color:#888;">
-          If you have questions, reply to this email.
-        </div>
-      </div>
-    `,
+    html: writersBlockEmailDocument({
+      preheader: `Your ${planDisplay} plan is active.`,
+      title: "Payment confirmed",
+      bodyHtml,
+      primaryCta: { href: `${site}/dashboard`, label: "Go to dashboard" },
+      footnote: "If you have billing questions, reply to this email.",
+    }),
   })
 }
 
@@ -133,6 +128,7 @@ export async function sendExpiryWarning(
   daysLeft: number,
   expiryDate: Date
 ): Promise<void> {
+  const site = getPublicSiteOrigin()
   const planDisplay = plan.charAt(0).toUpperCase() + plan.slice(1)
   const expiry = expiryDate.toLocaleDateString("en-IN", {
     day: "numeric",
@@ -140,28 +136,20 @@ export async function sendExpiryWarning(
     year: "numeric",
   })
 
+  const bodyHtml = `
+    <p style="margin:0 0 16px 0;">Your <strong style="color:#ffffff;">${escapeHtml(planDisplay)}</strong> plan will expire on <strong style="color:#00d4ff;">${escapeHtml(expiry)}</strong> (${daysLeft} day${daysLeft !== 1 ? "s" : ""} left).</p>
+    <p style="margin:0; color:rgba(255,255,255,0.7);">Renew to keep full access to your screenplays and AI tools.</p>`
+
   await sendEmail({
     to: email,
     subject: `Your ${planDisplay} Plan expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
-        <div style="background:#0a0a0a;padding:24px;text-align:center;">
-          <h1 style="color:#ff6b35;margin:0;font-size:24px;">Writers Block</h1>
-        </div>
-        <div style="padding:32px 24px;">
-          <h2 style="margin-top:0;">Your subscription is expiring soon</h2>
-          <p>Your <strong>${planDisplay} Plan</strong> will expire on <strong>${expiry}</strong> (${daysLeft} day${daysLeft !== 1 ? "s" : ""} left).</p>
-          <p>Renew now to keep full access to your screenplays and AI generation tools.</p>
-          <a href="https://writersblock.app/dashboard/subscription"
-             style="display:inline-block;background:#ff6b35;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">
-            Renew Subscription
-          </a>
-        </div>
-        <div style="padding:16px 24px;background:#f5f5f5;font-size:12px;color:#888;">
-          After expiry, your account moves to the Free plan (5 projects).
-        </div>
-      </div>
-    `,
+    html: writersBlockEmailDocument({
+      preheader: `Your subscription ends in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`,
+      title: "Subscription expiring soon",
+      bodyHtml,
+      primaryCta: { href: `${site}/dashboard/subscription`, label: "Renew subscription" },
+      footnote: "After expiry, your account moves to the free plan (limited projects and AI).",
+    }),
   })
 }
 
@@ -173,32 +161,21 @@ export async function sendScreenplayPdfEmail(
 ): Promise<boolean> {
   const displayTitle = screenplayTitle.trim().slice(0, 200) || "Your screenplay"
   const filename = safePdfFilename(displayTitle)
-  const site =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/^https?:\/\//, "").replace(/\/$/, "") ||
-    "writersblock.app"
+  const site = getPublicSiteOrigin()
+  const host = site.replace(/^https?:\/\//, "")
 
   return sendEmail({
     to: email,
     subject: `Your screenplay: ${displayTitle}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
-        <div style="background:#0a0a0a;padding:24px;text-align:center;">
-          <h1 style="color:#ff6b35;margin:0;font-size:24px;">Writers Block</h1>
-        </div>
-        <div style="padding:32px 24px;">
-          <h2 style="margin-top:0;">Your screenplay PDF is attached</h2>
-          <p>Here is <strong>${escapeHtml(displayTitle)}</strong> in PDF format, using the same Writers Block template as in the editor.</p>
-          <p style="color:#666;font-size:14px;">If you don&apos;t see the attachment, check your spam folder.</p>
-          <a href="https://${escapeHtml(site)}/editor"
-             style="display:inline-block;background:#ff6b35;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:16px;">
-            Open Editor
-          </a>
-        </div>
-        <div style="padding:16px 24px;background:#f5f5f5;font-size:12px;color:#888;">
-          Sent to your registered email · ${escapeHtml(site)}
-        </div>
-      </div>
-    `,
+    html: writersBlockEmailDocument({
+      preheader: "Your PDF is attached.",
+      title: "Your screenplay PDF is attached",
+      bodyHtml: `
+        <p style="margin:0 0 12px 0;">Here is <strong style="color:#ffffff;">${escapeHtml(displayTitle)}</strong> in PDF — same template as the editor.</p>
+        <p style="margin:0; font-size:14px; color:rgba(255,255,255,0.5);">If you don&apos;t see the attachment, check your spam folder.</p>`,
+      primaryCta: { href: `${site}/editor`, label: "Open editor" },
+      footnote: `Sent to your registered address · ${escapeHtml(host)}`,
+    }),
     attachments: [{ filename, content: pdfBuffer.toString("base64") }],
   })
 }

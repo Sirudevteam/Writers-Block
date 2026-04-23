@@ -4,7 +4,7 @@ import { motion } from "framer-motion"
 import { Crown, Zap, Sparkles, AlertCircle, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Subscription } from "@/types/project"
-import { PLAN_NAMES } from "@/types/project"
+import { PLAN_NAMES, isUnlimitedProjectLimit } from "@/types/project"
 
 interface SubscriptionPanelProps {
   subscription: Subscription
@@ -13,11 +13,16 @@ interface SubscriptionPanelProps {
 
 export function SubscriptionPanel({ subscription, onUpgrade }: SubscriptionPanelProps) {
   const { plan, projectsUsed, projectsLimit } = subscription
-  const isOverCapacity = projectsLimit > 0 && projectsUsed > projectsLimit
-  const usagePct = projectsLimit > 0 ? (projectsUsed / projectsLimit) * 100 : 100
+  const unlimited = isUnlimitedProjectLimit(projectsLimit)
+  const isOverCapacity = !unlimited && projectsLimit > 0 && projectsUsed > projectsLimit
+  const usagePct =
+    unlimited || projectsLimit <= 0
+      ? 0
+      : (projectsUsed / projectsLimit) * 100
   const barPct = Math.min(usagePct, 100)
-  const isNearLimit = !isOverCapacity && usagePct >= 80
-  const isAtLimit = projectsUsed >= projectsLimit
+  const isNearLimit = !unlimited && !isOverCapacity && usagePct >= 80
+  const isAtLimit = !unlimited && projectsUsed >= projectsLimit
+  const limitLabel = unlimited ? "Unlimited" : String(projectsLimit)
 
   const getPlanIcon = () => {
     switch (plan) {
@@ -89,7 +94,7 @@ export function SubscriptionPanel({ subscription, onUpgrade }: SubscriptionPanel
             <span
               className={`font-bold text-lg ${isNearLimit || isAtLimit || isOverCapacity ? "text-red-400" : "text-white"}`}
             >
-              {projectsUsed} / {projectsLimit}
+              {projectsUsed} / {limitLabel}
             </span>
           </div>
 
@@ -126,6 +131,8 @@ export function SubscriptionPanel({ subscription, onUpgrade }: SubscriptionPanel
               </span>
             ) : isAtLimit ? (
               <span className="text-red-400">No projects remaining</span>
+            ) : unlimited ? (
+              <span>Room for your scripts and drafts without a hard project cap on Premium.</span>
             ) : (
               <>
                 <span className="text-white font-medium">{projectsLimit - projectsUsed}</span> projects remaining

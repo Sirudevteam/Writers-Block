@@ -10,11 +10,12 @@ function FAQItem({ item, index }: { item: HomeFAQItem; index: number }) {
 
   return (
     <motion.div
+      id={item.id}
       initial={{ opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.05 }}
-      className="border border-white/10 rounded-xl overflow-hidden"
+      className="border border-white/10 rounded-xl overflow-hidden scroll-mt-24"
     >
       <button
         onClick={() => setOpen(!open)}
@@ -83,7 +84,7 @@ export function HomeFAQSection() {
 
         <div className="space-y-3">
           {faqItems.map((item, index) => (
-            <FAQItem key={item.question} item={item} index={index} />
+            <FAQItem key={item.id ?? item.question} item={item} index={index} />
           ))}
         </div>
       </div>

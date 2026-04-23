@@ -15,6 +15,7 @@ import crypto from "crypto"
 import Razorpay from "razorpay"
 import { createClient } from "@supabase/supabase-js"
 import { applyRazorpayPayment } from "@/lib/apply-razorpay-payment"
+import { invalidateSubscriptionPlanCache } from "@/lib/subscription-plan-cache"
 import { getRazorpayOrderAmountPaise, isPaidPlan } from "@/lib/razorpay-pricing"
 import { sendPaymentConfirmation } from "@/lib/email"
 import { PLAN_LIMITS } from "@/types/project"
@@ -139,6 +140,8 @@ export async function POST(req: NextRequest) {
     console.log("[webhook] Payment already processed:", razorpay_payment_id)
     return NextResponse.json({ received: true, alreadyProcessed: true })
   }
+
+  await invalidateSubscriptionPlanCache(String(user_id))
 
   const periodEnd = new Date(applied.currentPeriodEnd)
 

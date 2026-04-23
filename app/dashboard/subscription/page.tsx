@@ -6,13 +6,13 @@ import { ArrowLeft, Check, Sparkles, Zap, Crown, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { SubscriptionPanel } from "@/components/subscription-panel"
 import { useUser } from "@/hooks/useUser"
 import { useProjects } from "@/hooks/useProjects"
 import { useRazorpay } from "@/hooks/useRazorpay"
 import type { Subscription } from "@/types/project"
 import { toUISubscription } from "@/lib/subscription"
+import { PRO_MONTHLY_INR, PREMIUM_MONTHLY_INR } from "@/lib/pricing-inr"
 
 const plans = [
   {
@@ -23,46 +23,46 @@ const plans = [
     icon: Sparkles,
     color: "from-gray-500/20 to-gray-600/20",
     borderColor: "border-gray-500/30",
+    upgradeHint: "Outgrow rough drafts: upgrade when you need a script you can hand to a director.",
     features: [
       "Up to 5 projects",
-      "Basic AI story generation",
-      "Standard support",
-      "Community access",
+      "Tamil & English support",
+      "Lighter AI for drafting; watermarked PDF export",
+      "Scene references to learn from films",
     ],
   },
   {
     id: "pro",
     name: "Pro",
-    price: "₹1999",
+    price: `₹${PRO_MONTHLY_INR.toLocaleString("en-IN")}`,
     period: "per month",
     icon: Zap,
     color: "from-cinematic-blue/20 to-blue-500/20",
     borderColor: "border-cinematic-blue/30",
+    upgradeHint: "Need team-sized headroom? Premium is for sustained professional throughput.",
     features: [
       "Up to 25 projects",
-      "Advanced AI generation",
-      "Priority support",
-      "Shot suggestions",
-      "Export to PDF",
-      "Reference scenes",
+      "Production-aimed scene generation and dialogue improver",
+      "Style rewrite presets (Pro & Premium)",
+      "Clean PDF & email send—no free-tier watermark",
+      "Shot ideas + movie references",
     ],
   },
   {
     id: "premium",
     name: "Premium",
-    price: "₹4999",
+    price: `₹${PREMIUM_MONTHLY_INR.toLocaleString("en-IN")}`,
     period: "per month",
     icon: Crown,
     color: "from-cinematic-orange/20 to-orange-500/20",
     borderColor: "border-cinematic-orange/30",
+    upgradeHint: "Built for people who treat the screenplay as a product, not a one-off file.",
     features: [
-      "Up to 100 projects",
-      "Premium AI models",
-      "24/7 Priority support",
-      "All Pro features",
-      "Custom AI training",
-      "API access",
-      "Team collaboration",
+      "Unlimited projects (high plan cap)",
+      "Strongest model routing in the stack",
+      "All Pro features with higher daily AI allowance",
+      "Priority when the system is under load",
+      "Roadmap: org-friendly workflows—contact us for early access",
     ],
   },
 ]
@@ -77,7 +77,6 @@ export default function SubscriptionPage() {
     onSuccess: () => {
       setSuccessMessage("Payment successful! Your plan has been upgraded.")
       setPaymentError(null)
-      // Reload to reflect new subscription
       window.location.reload()
     },
     onError: (err) => {
@@ -95,11 +94,7 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex">
-      <DashboardSidebar />
-
-      <main className="flex-1 ml-0 lg:ml-64">
-        {/* Header */}
+    <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/10">
           <div className="pl-14 lg:pl-6 pr-6 py-4">
             <div className="flex items-center gap-4">
@@ -110,16 +105,13 @@ export default function SubscriptionPage() {
               </Link>
               <div>
                 <h1 className="text-2xl font-bold font-display text-white">Subscription</h1>
-                <p className="text-sm text-muted-foreground">
-                  Manage your plan and billing
-                </p>
+                <p className="text-sm text-muted-foreground">Manage your plan and billing</p>
               </div>
             </div>
           </div>
         </header>
 
         <div className="p-6 max-w-6xl mx-auto">
-          {/* Success / Error banners */}
           {successMessage && (
             <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
               {successMessage}
@@ -131,7 +123,6 @@ export default function SubscriptionPage() {
             </div>
           )}
 
-          {/* Current Plan */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -148,7 +139,6 @@ export default function SubscriptionPage() {
             )}
           </motion.div>
 
-          {/* Upgrade Options */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -168,9 +158,11 @@ export default function SubscriptionPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + index * 0.1 }}
                   >
-                    <Card className={`h-full bg-gradient-to-br ${plan.color} border ${plan.borderColor} ${
-                      isCurrentPlan ? "ring-2 ring-cinematic-orange" : ""
-                    }`}>
+                    <Card
+                      className={`h-full bg-gradient-to-br ${plan.color} border ${plan.borderColor} ${
+                        isCurrentPlan ? "ring-2 ring-cinematic-orange" : ""
+                      }`}
+                    >
                       <CardHeader>
                         <div className="flex items-center gap-3 mb-2">
                           <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
@@ -187,6 +179,9 @@ export default function SubscriptionPage() {
                           <span className="text-3xl font-bold text-white">{plan.price}</span>
                           <span className="text-muted-foreground">/{plan.period}</span>
                         </div>
+                        <p className="text-xs text-white/50 pt-1 border-l-2 border-cinematic-orange/30 pl-2 mt-1">
+                          {plan.upgradeHint}
+                        </p>
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-3 mb-6">
@@ -208,9 +203,7 @@ export default function SubscriptionPage() {
                           disabled={isCurrentPlan || plan.id === "free" || isPaymentLoading}
                           onClick={() => handleUpgrade(plan.id)}
                         >
-                          {isPaymentLoading ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : null}
+                          {isPaymentLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                           {isCurrentPlan ? "Current Plan" : plan.id === "free" ? "Free Plan" : "Upgrade"}
                         </Button>
                       </CardContent>
@@ -221,7 +214,6 @@ export default function SubscriptionPage() {
             </div>
           </motion.div>
 
-          {/* FAQ */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -237,7 +229,7 @@ export default function SubscriptionPage() {
                 },
                 {
                   q: "What happens when I reach my project limit?",
-                  a: "You'll need to upgrade to a higher plan or delete existing projects to create new ones.",
+                  a: "You'll need to upgrade to a higher plan or delete existing projects to create new ones. Premium is effectively uncapped for normal professional use.",
                 },
                 {
                   q: "Can I change my plan later?",
@@ -245,7 +237,7 @@ export default function SubscriptionPage() {
                 },
                 {
                   q: "Is there a free trial?",
-                  a: "Yes, you can start with our Free plan and upgrade when you're ready for more features.",
+                  a: "Yes. The Free plan lets you write and export watermarked PDFs. Upgrade to Pro for clean export and the full set of pro writing tools.",
                 },
               ].map((faq, index) => (
                 <div key={index} className="bg-card/50 border border-white/10 rounded-lg p-4">
@@ -257,6 +249,5 @@ export default function SubscriptionPage() {
           </motion.div>
         </div>
       </main>
-    </div>
   )
 }

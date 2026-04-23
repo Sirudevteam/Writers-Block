@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -14,11 +14,9 @@ import {
   Film,
   LogOut,
   Sparkles,
-  Shield,
 } from "lucide-react"
-import { useDashboardAdminLink } from "@/components/dashboard-admin-context"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
+import { signOutAction } from "@/lib/auth/actions"
 
 interface NavItem {
   href: string
@@ -36,20 +34,36 @@ const navItems: NavItem[] = [
 export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const showAdminLink = useDashboardAdminLink()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
   const handleSignOut = async () => {
     setSigningOut(true)
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await signOutAction()
     router.push("/signin")
     router.refresh()
   }
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mobileMenuOpen])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [mobileMenuOpen])
+
   return (
-    <>
+    <div className="relative z-40 w-0 shrink-0 self-stretch lg:w-64">
       {/* Mobile Menu Button */}
       <button
         type="button"
@@ -100,10 +114,13 @@ export function DashboardSidebar() {
       {/* Sidebar */}
       <motion.aside
         id="dashboard-sidebar-nav"
+        role="navigation"
+        aria-label="Dashboard"
         initial={{ x: -280 }}
         animate={{ x: 0 }}
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 max-w-[min(100vw-2rem,16rem)] bg-[#0a0a0a]/95 backdrop-blur-2xl border-r border-white/10 flex flex-col
-          transform transition-transform duration-300 lg:transform-none
+        className={`fixed inset-y-0 left-0 z-40 flex min-h-0 w-full max-w-[min(100vw,20rem)] flex-col border-r border-white/10 bg-[#0a0a0a]/95 backdrop-blur-2xl
+          transform transition-transform duration-300 ease-out
+          lg:relative lg:inset-auto lg:z-0 lg:min-h-screen lg:w-full lg:max-w-none lg:translate-x-0 lg:transform-none
           ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
@@ -111,7 +128,7 @@ export function DashboardSidebar() {
         <div className="absolute inset-0 bg-gradient-to-b from-cinematic-orange/5 via-transparent to-cinematic-blue/5 pointer-events-none" />
 
         {/* Logo */}
-        <div className="p-6 border-b border-white/10 relative">
+        <div className="relative border-b border-white/10 p-4 pt-[max(1.5rem,env(safe-area-inset-top))] sm:p-6 sm:pt-6">
           <Link href="/" className="flex items-center gap-3 group">
             <motion.div
               whileHover={{ rotate: 15, scale: 1.1 }}
@@ -132,7 +149,7 @@ export function DashboardSidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1 relative">
+        <nav className="relative flex-1 space-y-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {navItems.map((item, index) => {
             const isActive = pathname === item.href
             const Icon = item.icon
@@ -155,11 +172,7 @@ export function DashboardSidebar() {
                   `}
                 >
                   {isActive && (
-                    <motion.div
-                      layoutId="activeNav"
-                      className="absolute left-0 w-1 h-8 bg-cinematic-orange rounded-r-full"
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
+                    <div className="absolute left-0 h-8 w-1 rounded-r-full bg-cinematic-orange" aria-hidden />
                   )}
                   <Icon className={`w-5 h-5 transition-colors ${isActive ? "text-cinematic-orange" : "group-hover:text-white"}`} />
                   <span className="font-medium">{item.label}</span>
@@ -173,34 +186,10 @@ export function DashboardSidebar() {
               </motion.div>
             )
           })}
-          {showAdminLink && (
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: navItems.length * 0.1 }}
-            >
-              <Link
-                href="/dashboard/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
-                  ${pathname === "/dashboard/admin"
-                    ? "bg-cinematic-orange/10 text-cinematic-orange border border-cinematic-orange/20"
-                    : "text-muted-foreground hover:bg-white/5 hover:text-white"
-                  }
-                `}
-              >
-                {pathname === "/dashboard/admin" && (
-                  <div className="absolute left-0 w-1 h-8 bg-cinematic-orange rounded-r-full" />
-                )}
-                <Shield className="w-5 h-5" />
-                <span className="font-medium">Admin</span>
-              </Link>
-            </motion.div>
-          )}
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-4 border-t border-white/10 relative">
+        <div className="relative border-t border-white/10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button
             variant="ghost"
             className="w-full justify-start text-muted-foreground hover:text-white hover:bg-white/5 rounded-xl"
@@ -212,6 +201,6 @@ export function DashboardSidebar() {
           </Button>
         </div>
       </motion.aside>
-    </>
+    </div>
   )
 }

@@ -6,7 +6,6 @@ import { Plus, Search, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { ProjectCard } from "@/components/project-card"
 import { CreateProjectModal } from "@/components/create-project-modal"
 import { EmptyProjects } from "@/components/empty-projects"
@@ -72,60 +71,73 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex">
-      <DashboardSidebar />
-
-      <main className="flex-1 ml-0 lg:ml-64">
-        <header className="sticky top-0 z-30 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/10">
-          <div className="pl-14 lg:pl-6 pr-6 py-4">
-            <div className="flex items-center gap-4 mb-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-white">My Projects</h1>
-                <p className="text-sm text-muted-foreground">
-                  Manage all your screenplay projects
-                </p>
+    <>
+      <main className="relative z-10 flex min-w-0 flex-1 flex-col pt-[env(safe-area-inset-top,0px)]">
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/90 backdrop-blur-2xl">
+          <div className="px-4 pb-4 pl-14 pt-5 sm:px-6 lg:pl-6">
+            <div className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-3">
+                <Link href="/dashboard" className="shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 min-h-[44px] min-w-[44px] text-muted-foreground hover:text-white"
+                    aria-label="Back to dashboard"
+                  >
+                    <ArrowLeft className="h-5 w-5" aria-hidden />
+                  </Button>
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <h1 className="font-display text-xl font-bold text-white sm:text-2xl">
+                    <span className="block truncate">My Projects</span>
+                  </h1>
+                  <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+                    Manage all your screenplay projects
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
                 <Input
-                  placeholder="Search projects..."
+                  placeholder="Search projects…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-white/5 border-white/10"
+                  aria-label="Search projects"
+                  className="h-11 min-h-[44px] w-full rounded-xl border-white/10 bg-white/5 pl-10 text-base sm:text-sm"
                 />
               </div>
               <Button
+                type="button"
                 onClick={() => setIsCreateModalOpen(true)}
                 disabled={!canCreateProject || isLoading}
-                className="bg-cinematic-orange text-black hover:bg-cinematic-orange/90 disabled:opacity-50"
+                className="h-11 min-h-[44px] w-full shrink-0 rounded-xl bg-cinematic-orange text-black hover:bg-cinematic-orange/90 disabled:opacity-50 sm:w-auto sm:px-6"
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" aria-hidden />
                 New Project
               </Button>
             </div>
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="flex-1 px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-10">
           {projectsError && (
             <div
-              className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+              className="mb-6 flex flex-col gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 sm:flex-row sm:items-center sm:justify-between"
               role="alert"
             >
-              <span>{projectsError}</span>
+              <span className="min-w-0 break-words">{projectsError}</span>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-red-500/40 text-red-100 hover:bg-red-500/20 shrink-0"
+                className="shrink-0 border-red-500/40 text-red-100 hover:bg-red-500/20"
                 onClick={() => refetchProjects()}
               >
                 Retry
@@ -134,18 +146,24 @@ export default function ProjectsPage() {
           )}
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <CardSkeleton key={i} />
-              ))}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:gap-8">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:col-span-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <CardSkeleton key={i} />
+                ))}
+              </div>
+              <div
+                className="hidden min-h-[12rem] animate-pulse rounded-2xl bg-white/5 xl:block"
+                aria-hidden
+              />
             </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="xl:col-span-2">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:gap-8">
+              <div className="min-w-0 xl:col-span-2">
                 {filteredProjects.length === 0 ? (
                   <EmptyProjects onCreateClick={() => setIsCreateModalOpen(true)} />
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-4 lg:gap-5">
                     {filteredProjects.map((project, index) => (
                       <ProjectCard
                         key={project.id}
@@ -158,10 +176,10 @@ export default function ProjectsPage() {
                 )}
               </div>
 
-              <div className="space-y-6">
+              <aside className="min-w-0 xl:sticky xl:top-36 xl:self-start">
                 <motion.div
-                  initial={{ opacity: 0, x: 16 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
                 >
                   <SubscriptionPanel
@@ -169,7 +187,7 @@ export default function ProjectsPage() {
                     onUpgrade={() => router.push("/dashboard/subscription")}
                   />
                 </motion.div>
-              </div>
+              </aside>
             </div>
           )}
         </div>
@@ -180,6 +198,6 @@ export default function ProjectsPage() {
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateProject}
       />
-    </div>
+    </>
   )
 }

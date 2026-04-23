@@ -5,11 +5,15 @@ import { PROJECT_LIST_COLUMNS } from "@/lib/project-list-select"
 // Cache user data to prevent duplicate requests in the same render
 export const getUserData = cache(async () => {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  
-  if (authError || !user) {
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession()
+
+  if (authError || !session?.user) {
     return null
   }
+  const user = session.user
   
   // Fetch profile and subscription in parallel
   const [{ data: profile }, { data: subscription }] = await Promise.all([

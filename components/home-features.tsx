@@ -15,6 +15,7 @@ const features = [
     gradient: "from-cinematic-orange/30 via-cinematic-orange/10 to-transparent",
     iconBg: "bg-cinematic-orange/20",
     iconColor: "text-cinematic-orange",
+    spotlightRgb: "255, 107, 53",
     href: "/editor",
     action: "Try it now",
   },
@@ -27,6 +28,7 @@ const features = [
     gradient: "from-cinematic-blue/30 via-cinematic-blue/10 to-transparent",
     iconBg: "bg-cinematic-blue/20",
     iconColor: "text-cinematic-blue",
+    spotlightRgb: "0, 212, 255",
     href: "/editor",
     action: "Explore references",
   },
@@ -39,6 +41,7 @@ const features = [
     gradient: "from-purple-500/30 via-purple-500/10 to-transparent",
     iconBg: "bg-purple-500/20",
     iconColor: "text-purple-400",
+    spotlightRgb: "168, 85, 247",
     href: "/editor",
     action: "Improve dialogue",
   },
@@ -51,6 +54,7 @@ const features = [
     gradient: "from-green-500/30 via-green-500/10 to-transparent",
     iconBg: "bg-green-500/20",
     iconColor: "text-green-400",
+    spotlightRgb: "74, 222, 128",
     href: "/editor",
     action: "Get shots",
   },
@@ -63,6 +67,7 @@ const features = [
     gradient: "from-pink-500/30 via-pink-500/10 to-transparent",
     iconBg: "bg-pink-500/20",
     iconColor: "text-pink-400",
+    spotlightRgb: "244, 114, 182",
     href: "/editor",
     action: "Start writing",
   },
@@ -80,9 +85,11 @@ function BentoCard({ feature, index }: { feature: typeof features[0]; index: num
     mouseY.set(e.clientY - rect.top)
   }
 
+  const rgb = feature.spotlightRgb ?? "255, 107, 53"
   const background = useTransform(
     [mouseX, mouseY],
-    ([x, y]) => `radial-gradient(400px circle at ${x}px ${y}px, rgba(255,107,53,0.15), transparent 60%)`
+    ([x, y]) =>
+      `radial-gradient(400px circle at ${x}px ${y}px, rgba(${rgb},0.18), transparent 60%)`
   )
 
   const Icon = feature.icon
@@ -137,14 +144,16 @@ function BentoCard({ feature, index }: { feature: typeof features[0]; index: num
             </p>
 
             {/* Action indicator */}
-            <div className="mt-4 flex items-center gap-2 text-sm text-cinematic-orange opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+            <div className="mt-4 flex translate-y-0 items-center gap-2 text-sm text-cinematic-orange opacity-100 transition-all duration-300 md:translate-y-2 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100">
               <span>{feature.action}</span>
               <motion.span
+                className="max-md:hidden md:inline-flex"
                 animate={{ x: [0, 4, 0] }}
                 transition={{ duration: 1, repeat: Infinity }}
               >
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4" aria-hidden />
               </motion.span>
+              <ArrowRight className="h-4 w-4 md:hidden" aria-hidden />
             </div>
           </div>
         </motion.div>

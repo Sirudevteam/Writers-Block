@@ -15,6 +15,8 @@ interface ScreenplayEditorProps {
   title?: string
   /** When set, user can email a branded PDF to their registered address. */
   projectId?: string | null
+  /** Free plan: add preview watermark to browser print / Save as PDF. */
+  exportPrintWatermark?: boolean
 }
 
 const DEFAULT_SITE_URL = "https://writersblock.app"
@@ -58,6 +60,7 @@ export function ScreenplayEditor({
   onContentChange,
   title = "Screenplay",
   projectId = null,
+  exportPrintWatermark = false,
 }: ScreenplayEditorProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const previousContentLength = useRef(0)
@@ -108,7 +111,7 @@ export function ScreenplayEditor({
         ? process.env.NEXT_PUBLIC_SITE_URL
         : DEFAULT_SITE_URL
 
-    const html = generatePrintHTML(content, title, siteUrl)
+    const html = generatePrintHTML(content, title, siteUrl, exportPrintWatermark)
     printWindow.document.open()
     printWindow.document.write(html)
     printWindow.document.close()
@@ -128,7 +131,7 @@ export function ScreenplayEditor({
         window.setTimeout(runPrint, 350)
       })
     })
-  }, [content, title])
+  }, [content, title, exportPrintWatermark])
 
   const handleEmailPdf = useCallback(async () => {
     if (!projectId || !content.trim()) return
@@ -211,7 +214,7 @@ export function ScreenplayEditor({
                     size="sm" 
                     onClick={handleExportPDF} 
                     className="h-8 text-xs text-white/70 hover:text-white"
-                    title="Export to PDF"
+                    title={exportPrintWatermark ? "Export with preview watermark. Upgrade to Pro for a clean print PDF." : "Export to PDF"}
                   >
                     <FileDown className="w-3.5 h-3.5 mr-1" />
                     Export PDF

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
 import Anthropic from "@anthropic-ai/sdk"
 
 const anthropic = new Anthropic({
@@ -167,6 +168,9 @@ Ensure all YouTube IDs are valid and scenes are from well-known, critically accl
 
 export async function POST(request: NextRequest) {
   try {
+    const tooMany = await apiIpLimitOr429(request)
+    if (tooMany) return tooMany
+
     // Check authentication
     const supabase = await createClient()
     const {

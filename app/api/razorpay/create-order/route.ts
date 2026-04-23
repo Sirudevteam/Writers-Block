@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Razorpay from "razorpay"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
 import { getRazorpayOrderAmountPaise } from "@/lib/razorpay-pricing"
 import type { BillingCycle, SubscriptionPlan } from "@/types/project"
 
@@ -16,6 +17,9 @@ const PLAN_NAMES: Record<Exclude<SubscriptionPlan, "free">, Record<BillingCycle,
 }
 
 export async function POST(req: NextRequest) {
+  const tooMany = await apiIpLimitOr429(req)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },

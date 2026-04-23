@@ -3,6 +3,8 @@ import crypto from "crypto"
 import Razorpay from "razorpay"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
+import { invalidateSubscriptionPlanCache } from "@/lib/subscription-plan-cache"
 import { applyRazorpayPayment } from "@/lib/apply-razorpay-payment"
 import { getRazorpayOrderAmountPaise, isPaidPlan } from "@/lib/razorpay-pricing"
 import { sendPaymentConfirmation } from "@/lib/email"
@@ -22,6 +24,9 @@ function getAdminSupabase() {
 }
 
 export async function POST(req: NextRequest) {
+  const tooMany = await apiIpLimitOr429(req)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -135,6 +140,8 @@ export async function POST(req: NextRequest) {
   if (applied.status === "duplicate") {
     return NextResponse.json({ success: true, alreadyProcessed: true })
   }
+
+  await invalidateSubscriptionPlanCache(user.id)
 
   const periodEnd = new Date(applied.currentPeriodEnd)
 

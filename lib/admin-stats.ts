@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
+import { fetchMasterAdminUserIds, notInTuple } from "@/lib/master-admin-queries"
 import { getRazorpayOrderAmountPaise, isPaidPlan } from "@/lib/razorpay-pricing"
 import type { BillingCycle } from "@/types/project"
 
@@ -115,6 +116,12 @@ export async function computeAdminStats(
 ): Promise<AdminStats> {
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
+  const operatorIds = await fetchMasterAdminUserIds(adminSupabase)
+  const operatorTuple = notInTuple(operatorIds)
+
+  let profilesCountQ = adminSupabase.from("profiles").select("id", { count: "exact", head: true })
+  if (operatorTuple) profilesCountQ = profilesCountQ.not("id", "in", operatorTuple)
+
   const [
     profilesRes,
     projectsRes,
@@ -124,7 +131,7 @@ export async function computeAdminStats(
     usageSampleRes,
     recentPaymentsRes,
   ] = await Promise.all([
-    adminSupabase.from("profiles").select("id", { count: "exact", head: true }),
+    profilesCountQ,
     adminSupabase.from("projects").select("id", { count: "exact", head: true }),
     adminSupabase.rpc("admin_subscription_group_counts"),
     adminSupabase.from("usage_logs").select("id", { count: "exact", head: true }),

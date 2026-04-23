@@ -3,6 +3,8 @@
  * Default production model: google/gemini-2.5-flash
  */
 
+import type { SubscriptionPlan } from "@/types/project"
+
 export const DEFAULT_REPLICATE_MODEL = "google/gemini-2.5-flash"
 
 export function isGeminiModel(model: string): boolean {
@@ -11,6 +13,18 @@ export function isGeminiModel(model: string): boolean {
 
 export function getReplicateModel(): string {
   return process.env.REPLICATE_MODEL || DEFAULT_REPLICATE_MODEL
+}
+
+/** Per-plan Replicate model; each tier falls back to `REPLICATE_MODEL` then `DEFAULT_REPLICATE_MODEL`. */
+export function getReplicateModelForPlan(plan: SubscriptionPlan): string {
+  const base = getReplicateModel()
+  if (plan === "free") {
+    return process.env.REPLICATE_MODEL_FREE || base
+  }
+  if (plan === "pro") {
+    return process.env.REPLICATE_MODEL_PRO || base
+  }
+  return process.env.REPLICATE_MODEL_PREMIUM || process.env.REPLICATE_MODEL_PRO || base
 }
 
 export function buildTextCompletionInput(

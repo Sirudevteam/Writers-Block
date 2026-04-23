@@ -15,7 +15,8 @@ const DEFAULT_SITE_URL = "https://writersblock.app"
 export function generatePrintHTML(
   content: string,
   title: string = "Screenplay",
-  siteUrl: string = DEFAULT_SITE_URL
+  siteUrl: string = DEFAULT_SITE_URL,
+  watermark: boolean = false
 ): string {
   const html: string[] = []
   for (const line of parseScreenplay(content)) {
@@ -168,6 +169,28 @@ export function generatePrintHTML(
       margin: 16pt 0;
     }
 
+    .print-wm {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .print-wm span {
+      font-family: system-ui, "Segoe UI", sans-serif;
+      font-size: 48pt;
+      font-weight: 800;
+      color: rgba(0, 0, 0, 0.07);
+      transform: rotate(-32deg);
+      user-select: none;
+    }
+    .print-surface {
+      position: relative;
+      z-index: 1;
+    }
+
     @media print {
       body {
         background: #ffffff !important;
@@ -191,6 +214,8 @@ export function generatePrintHTML(
   </style>
 </head>
 <body>
+  ${watermark ? '<div class="print-wm" aria-hidden="true"><span>Writers Block — Free preview</span></div>' : ""}
+  <div class="print-surface">
   <header class="print-brand-header">
     <div class="brand-name">Writers Block</div>
     <div class="brand-sub">AI screenplay writing — ${escapeHtml(displayUrl)}</div>
@@ -200,6 +225,7 @@ export function generatePrintHTML(
 ${html.join("\n")}
   </div>
   <footer class="print-footer">Created with Writers Block · ${escapeHtml(displayUrl)}</footer>
+  </div>
 </body>
 </html>`
 }

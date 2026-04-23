@@ -1,18 +1,16 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { notFound } from "next/navigation"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
-import { isAdminEmail } from "@/lib/admin"
+import { userHasAdminPrivileges } from "@/lib/admin-privileges"
 import { computeAdminStats, type AdminStats } from "@/lib/admin-stats"
+import { getServerSessionUser } from "@/lib/supabase/server-auth"
 
 export default async function AdminDashboard() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const session = await getServerSessionUser()
+  const user = session?.user
 
-  if (!user?.email || !isAdminEmail(user.email)) {
-    redirect("/dashboard")
+  if (!user?.id || !(await userHasAdminPrivileges(user.id))) {
+    notFound()
   }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

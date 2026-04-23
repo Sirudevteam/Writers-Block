@@ -1,7 +1,7 @@
 "use client"
 
-import { motion, useAnimationControls, PanInfo } from "framer-motion"
-import { Star, Quote, ChevronLeft, ChevronRight, BadgeCheck } from "lucide-react"
+import { motion, PanInfo } from "framer-motion"
+import { Star, Quote, ChevronLeft, ChevronRight } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 
 const testimonials = [
@@ -12,7 +12,6 @@ const testimonials = [
     role: "Tamil Screenwriter",
     location: "Chennai",
     rating: 5,
-    verified: true,
     avatar: "K",
     color: "from-cinematic-orange to-amber-500",
   },
@@ -23,7 +22,6 @@ const testimonials = [
     role: "Independent Director",
     location: "Coimbatore",
     rating: 5,
-    verified: true,
     avatar: "R",
     color: "from-cinematic-blue to-cyan-400",
   },
@@ -34,7 +32,6 @@ const testimonials = [
     role: "Film Student, SAE Institute",
     location: "Bangalore",
     rating: 5,
-    verified: true,
     avatar: "A",
     color: "from-purple-500 to-pink-400",
   },
@@ -45,7 +42,6 @@ const testimonials = [
     role: "Indie Filmmaker & Writer",
     location: "Chennai",
     rating: 5,
-    verified: true,
     avatar: "P",
     color: "from-green-500 to-emerald-400",
   },
@@ -56,7 +52,6 @@ const testimonials = [
     role: "Screenwriter & Lyricist",
     location: "Madurai",
     rating: 5,
-    verified: true,
     avatar: "V",
     color: "from-pink-500 to-rose-400",
   },
@@ -65,9 +60,6 @@ const testimonials = [
 export function HomeTestimonialsSection() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
-  const controls = useAnimationControls()
-
-  const slideWidth = 100 / 3 // Show 3 cards at a time on desktop
 
   const nextSlide = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % testimonials.length)
@@ -126,14 +118,14 @@ export function HomeTestimonialsSection() {
             Testimonials
           </motion.span>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-white mb-4">
-            Trusted by Tamil{" "}
+            Why writers choose{" "}
             <span className="bg-gradient-to-r from-cinematic-orange to-amber-500 bg-clip-text text-transparent">
-              Filmmakers
+              Writers Block
             </span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-lg">
-            Screenwriters, directors, and students across India use Writers Block
-            to create better screenplays, faster.
+            Composite stories that reflect the kinds of outcomes writers tell us about—your mileage will vary, but the
+            workflow is built for real drafts.
           </p>
         </motion.div>
 
@@ -157,11 +149,10 @@ export function HomeTestimonialsSection() {
 
           {/* Cards Container */}
           <motion.div
-            className="flex gap-6 cursor-grab active:cursor-grabbing"
+            className="flex cursor-grab gap-6 active:cursor-grabbing"
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             onDragEnd={handleDragEnd}
-            animate={controls}
           >
             {getVisibleTestimonials().map((testimonial, index) => (
               <motion.div
@@ -206,9 +197,6 @@ export function HomeTestimonialsSection() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-white">{testimonial.author}</p>
-                        {testimonial.verified && (
-                          <BadgeCheck className="w-4 h-4 text-cinematic-blue" aria-label="Verified user" />
-                        )}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {testimonial.role} · {testimonial.location}

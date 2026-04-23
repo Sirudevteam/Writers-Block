@@ -5,6 +5,14 @@ import { Check, Sparkles, Zap, Crown, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
+import {
+  PRO_MONTHLY_INR,
+  PRO_YEARLY_INR,
+  PREMIUM_MONTHLY_INR,
+  PREMIUM_YEARLY_INR,
+  SAVINGS_PRO_ANNUAL_INR,
+  SAVINGS_PREMIUM_ANNUAL_INR,
+} from "@/lib/pricing-inr"
 
 const plans = [
   {
@@ -14,60 +22,63 @@ const plans = [
     monthlyPrice: 0,
     yearlyPrice: 0,
     period: "forever",
-    description: "Perfect for getting started and exploring AI screenplay writing.",
+    description: "Try AI screenplay writing—good enough to learn, not to ship a final draft.",
+    upgradeHint: "When your draft feels “demo quality,” move to Pro for production output.",
     cta: "Start for Free",
     ctaHref: "/signup",
     highlight: false,
     features: [
       "Up to 5 projects",
-      "Basic AI scene generation",
-      "Tamil & English support",
-      "Movie scene references",
-      "Community support",
+      "Tamil & English screenplay support",
+      "Smarter on a budget: lighter AI for drafting",
+      "Watermarked export (print & email PDF)",
+      "Scene references to study craft",
     ],
   },
   {
     id: "pro",
     icon: Zap,
     name: "Pro",
-    monthlyPrice: 1999,
-    yearlyPrice: 1599,
+    monthlyPrice: PRO_MONTHLY_INR,
+    yearlyPrice: PRO_YEARLY_INR,
     period: "per month",
-    description: "For working screenwriters who need more power and faster output.",
+    description: "Write production-ready scripts faster—stronger scenes, better dialogue, clean exports.",
+    upgradeHint: "For studios and teams, Premium adds headroom and advanced workflow (see below).",
     cta: "Upgrade to Pro",
     ctaHref: "/signup",
     highlight: true,
     badge: "Most Popular",
-    savings: "Save ₹4,800/year",
+    savings: `Save ₹${SAVINGS_PRO_ANNUAL_INR.toLocaleString("en-IN")}/year`,
     features: [
       "Up to 25 projects",
-      "Advanced AI generation",
-      "AI Dialogue Improver",
-      "Shot suggestions",
-      "Export to PDF",
-      "Priority support",
+      "High-quality Tamil & English screenplay generation",
+      "Dialogue improver and scene continuation",
+      "Style rewrite: mass, emotional, snappy, or grounded (Pro and Premium)",
+      "Up to 50 AI generations per day (fair use; see plan)",
+      "Clean PDF export (no preview watermark) + email PDF",
+      "Faster generation vs Free",
     ],
   },
   {
     id: "premium",
     icon: Crown,
     name: "Premium",
-    monthlyPrice: 4999,
-    yearlyPrice: 3999,
+    monthlyPrice: PREMIUM_MONTHLY_INR,
+    yearlyPrice: PREMIUM_YEARLY_INR,
     period: "per month",
-    description: "For production houses and teams building at scale.",
+    description: "AI co-writer for professional filmmaking: room for every draft, and first-in-line quality.",
+    upgradeHint: "For writers who need one place for pro-grade drafts without juggling multiple tools.",
     cta: "Go Premium",
     ctaHref: "/signup",
     highlight: false,
-    savings: "Save ₹12,000/year",
+    savings: `Save ₹${SAVINGS_PREMIUM_ANNUAL_INR.toLocaleString("en-IN")}/year`,
     features: [
-      "Up to 100 projects",
-      "Premium AI models",
-      "All Pro features",
-      "Team collaboration",
-      "API access",
-      "24/7 priority support",
-      "Custom AI training",
+      "Unlimited projects (fair use; high cap in billing)",
+      "Director-level storytelling: best routing for your plan",
+      "All Pro features + headroom for large productions",
+      "Style rewrite and dialogue tools at full strength",
+      "Priority for generation capacity when the service is busy",
+      "Custom tone & production instructions (project-level; coming soon) — ask sales",
     ],
   },
 ]
@@ -81,7 +92,6 @@ export function HomePricingSection() {
       aria-label="Pricing"
       className="py-24 px-4 sm:px-6 lg:px-8 scroll-mt-16 relative overflow-hidden"
     >
-      {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-cinematic-orange/5 rounded-full blur-3xl" />
       </div>
@@ -102,17 +112,16 @@ export function HomePricingSection() {
             Pricing
           </motion.span>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-white mb-4">
-            Simple,{" "}
+            Finish scripts faster,{" "}
             <span className="bg-gradient-to-r from-cinematic-orange to-amber-500 bg-clip-text text-transparent">
-              Transparent
-            </span>{" "}
-            Pricing
+              not just “try AI”
+            </span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-lg mb-8">
-            Start free. Upgrade when you&apos;re ready. No hidden fees, no long-term contracts.
+            Clear tiers: try for free, ship with Pro, scale with Premium. No hidden model jargon—just better scenes and
+            dialogue for Tamil and English cinema.
           </p>
 
-          {/* Toggle — full-width on narrow screens so badge never clips */}
           <div className="mx-auto flex w-full max-w-md flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-1 sm:mx-0 sm:inline-flex sm:w-auto sm:flex-row sm:rounded-full sm:gap-0">
             <button
               type="button"
@@ -165,7 +174,6 @@ export function HomePricingSection() {
                     : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.03]"
                 }`}
               >
-                {/* Most Popular Badge - Inside card, not overlapping */}
                 {plan.badge && (
                   <div className="absolute top-0 left-0 right-0 flex justify-center">
                     <motion.div
@@ -179,32 +187,29 @@ export function HomePricingSection() {
                   </div>
                 )}
 
-                {/* Glow effect for highlighted */}
                 {plan.highlight && (
                   <div className="absolute -inset-px rounded-2xl bg-gradient-to-b from-cinematic-orange/20 via-transparent to-transparent opacity-50 blur-sm" />
                 )}
 
                 <div className={`relative p-8 ${plan.badge ? "pt-10" : ""}`}>
-                  {/* Plan Header */}
                   <div className="flex items-center gap-3 mb-6">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      plan.highlight 
-                        ? "bg-cinematic-orange/20 border border-cinematic-orange/30" 
-                        : "bg-white/10 border border-white/10"
-                    }`}>
+                    <div
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                        plan.highlight
+                          ? "bg-cinematic-orange/20 border border-cinematic-orange/30"
+                          : "bg-white/10 border border-white/10"
+                      }`}
+                    >
                       <Icon className={`w-6 h-6 ${plan.highlight ? "text-cinematic-orange" : "text-white"}`} />
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-white">{plan.name}</h3>
                       {plan.savings && isYearly && (
-                        <span className="text-xs text-green-400 font-medium">
-                          {plan.savings}
-                        </span>
+                        <span className="text-xs text-green-400 font-medium">{plan.savings}</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Price */}
                   <div className="mb-6">
                     <div className="flex items-baseline gap-2">
                       <AnimatePresence mode="wait">
@@ -219,16 +224,14 @@ export function HomePricingSection() {
                           {displayPrice}
                         </motion.span>
                       </AnimatePresence>
-                      <span className="text-muted-foreground text-sm">
-                        / {plan.period}
-                      </span>
+                      <span className="text-muted-foreground text-sm">/ {plan.period}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                      {plan.description}
-                    </p>
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{plan.description}</p>
+                    {"upgradeHint" in plan && plan.upgradeHint && (
+                      <p className="text-xs text-white/50 mt-2 border-l-2 border-cinematic-orange/40 pl-3">{plan.upgradeHint}</p>
+                    )}
                   </div>
 
-                  {/* CTA Button */}
                   <Link href={plan.ctaHref} className="block mb-8">
                     <Button
                       className={`w-full h-12 font-semibold rounded-xl transition-all duration-300 group ${
@@ -242,7 +245,6 @@ export function HomePricingSection() {
                     </Button>
                   </Link>
 
-                  {/* Features */}
                   <ul className="space-y-3">
                     {plan.features.map((feature, i) => (
                       <motion.li
@@ -253,9 +255,11 @@ export function HomePricingSection() {
                         transition={{ delay: i * 0.05 }}
                         className="flex items-start gap-3"
                       >
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                          plan.highlight ? "bg-cinematic-orange/20" : "bg-white/10"
-                        }`}>
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                            plan.highlight ? "bg-cinematic-orange/20" : "bg-white/10"
+                          }`}
+                        >
                           <Check className={`w-3 h-3 ${plan.highlight ? "text-cinematic-orange" : "text-white/70"}`} />
                         </div>
                         <span className="text-sm text-white/80">{feature}</span>
@@ -268,7 +272,6 @@ export function HomePricingSection() {
           })}
         </div>
 
-        {/* Trust badge */}
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -277,9 +280,7 @@ export function HomePricingSection() {
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10">
             <Check className="w-4 h-4 text-green-500" />
-            <span className="text-sm text-muted-foreground">
-              All plans include Tamil &amp; English screenplay support
-            </span>
+            <span className="text-sm text-muted-foreground">Tamil &amp; English screenplay support on every plan</span>
           </div>
         </motion.div>
       </div>

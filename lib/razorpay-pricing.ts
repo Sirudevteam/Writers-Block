@@ -7,12 +7,12 @@ export function getRazorpayOrderAmountPaise(
 ): number {
   const pricing: Record<Exclude<SubscriptionPlan, "free">, Record<BillingCycle, number>> = {
     pro: {
-      monthly: parseInt(process.env.PRO_MONTHLY_PRICE_PAISE || "199900", 10),
-      annual: parseInt(process.env.PRO_ANNUAL_PRICE_PAISE || "1918800", 10),
+      monthly: parseInt(process.env.PRO_MONTHLY_PRICE_PAISE || "119900", 10),
+      annual: parseInt(process.env.PRO_ANNUAL_PRICE_PAISE || "1151000", 10),
     },
     premium: {
-      monthly: parseInt(process.env.PREMIUM_MONTHLY_PRICE_PAISE || "499900", 10),
-      annual: parseInt(process.env.PREMIUM_ANNUAL_PRICE_PAISE || "4798800", 10),
+      monthly: parseInt(process.env.PREMIUM_MONTHLY_PRICE_PAISE || "399900", 10),
+      annual: parseInt(process.env.PREMIUM_ANNUAL_PRICE_PAISE || "3839000", 10),
     },
   }
   return pricing[plan][billingCycle]

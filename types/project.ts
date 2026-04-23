@@ -20,10 +20,18 @@ export interface Subscription {
   expiresAt?: Date
 }
 
+/** At or above this projects_limit, UI treats the account as unlimited. */
+export const UNLIMITED_PROJECTS_THRESHOLD = 500_000
+
+export function isUnlimitedProjectLimit(n: number): boolean {
+  return n >= UNLIMITED_PROJECTS_THRESHOLD
+}
+
 export const PLAN_LIMITS: Record<SubscriptionPlan, number> = {
   free: 5,
   pro: 25,
-  premium: 100,
+  /** Matches DB: premium subscribers get 999,999 (effectively unlimited). */
+  premium: 999_999,
 }
 
 export const PLAN_NAMES: Record<SubscriptionPlan, string> = {

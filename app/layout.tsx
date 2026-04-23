@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
-import { Inter, Courier_Prime, Space_Grotesk } from "next/font/google"
+import { Inter, Courier_Prime, Space_Grotesk, Noto_Sans_Tamil } from "next/font/google"
 import { Analytics } from "@vercel/analytics/react"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css"
 import { AccessibilityProvider } from "@/components/accessibility-provider"
 
 const inter = Inter({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-inter",
   display: "swap",
   preload: true,
@@ -22,10 +22,20 @@ const courier = Courier_Prime({
 })
 
 const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-space",
   display: "swap",
   preload: false,
+})
+
+/** Tamil + Latin fallback so தமிழ் renders after Inter for each glyph. */
+const notoSansTamil = Noto_Sans_Tamil({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin", "tamil"],
+  variable: "--font-noto-tamil",
+  display: "swap",
+  preload: false,
+  adjustFontFallback: true,
 })
 
 export const metadata: Metadata = {
@@ -63,7 +73,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${courier.variable} ${spaceGrotesk.variable} font-sans antialiased bg-[#0a0a0a] text-white`}>
+      <body
+        className={`${inter.variable} ${notoSansTamil.variable} ${courier.variable} ${spaceGrotesk.variable} font-sans antialiased bg-[#0a0a0a] text-white`}
+      >
         <AccessibilityProvider>
           {children}
         </AccessibilityProvider>

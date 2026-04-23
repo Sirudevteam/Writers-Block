@@ -7,7 +7,6 @@ import { motion } from "framer-motion"
 import { Plus, Search, Grid3X3, List, Film, Sparkles, TrendingUp, Clock, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { ProjectCard } from "@/components/project-card"
 import { SubscriptionPanel } from "@/components/subscription-panel"
 import { CreateProjectModal } from "@/components/create-project-modal"
@@ -93,7 +92,7 @@ export default function DashboardPage() {
   const greetingTitle = firstName ? `${getGreeting()}, ${firstName}` : "Dashboard"
 
   return (
-    <div className="min-h-[100dvh] min-h-screen bg-[#0a0a0a] flex relative overflow-x-hidden">
+    <div className="min-h-[100dvh] min-h-screen bg-[#0a0a0a] relative overflow-x-hidden">
       {/* Background Effects — scaled down on narrow viewports; static when reduced motion */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {!prefersReducedMotion ? (
@@ -124,9 +123,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <DashboardSidebar />
-
-      <main className="flex-1 min-w-0 w-full ml-0 lg:ml-64 relative z-10 pt-[env(safe-area-inset-top,0px)]">
+      <main className="w-full min-w-0 relative z-10 pt-[env(safe-area-inset-top,0px)]">
         <header className="sticky top-0 z-30 bg-[#0a0a0a]/90 backdrop-blur-2xl border-b border-white/10">
           <FilmStrip className="absolute top-0 left-0 right-0 h-2" />
 

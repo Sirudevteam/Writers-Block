@@ -7,7 +7,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { dispatchProfileUpdated } from "@/lib/profile-events"
 import type { Profile } from "@/types/database"
 
@@ -105,10 +104,7 @@ export default function SettingsPage() {
   ] as const
 
   return (
-    <div className="flex min-h-[100dvh] min-h-screen bg-[#0a0a0a]">
-      <DashboardSidebar />
-
-      <main className="ml-0 flex min-h-[100dvh] min-h-screen w-full min-w-0 flex-1 flex-col lg:ml-64">
+    <main className="ml-0 flex min-h-[100dvh] min-h-screen w-full min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 shrink-0 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl">
           <div className="flex items-center gap-4 py-4 pl-14 pr-4 sm:pr-6 lg:pl-6 lg:pr-8">
             <Link href="/dashboard">
@@ -378,7 +374,6 @@ export default function SettingsPage() {
             </motion.div>
           </div>
         </div>
-      </main>
-    </div>
+    </main>
   )
 }

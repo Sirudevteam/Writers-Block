@@ -1,39 +1,42 @@
 import type { Metadata } from "next"
-import dynamic from "next/dynamic"
+import nextDynamic from "next/dynamic"
 import { Navbar } from "@/components/navbar"
 import { ScrollProgress } from "@/components/scroll-progress"
 import { FilmGrain } from "@/components/film-grain"
 import { HomeHero } from "@/components/home-hero"
 import { HomeStats } from "@/components/home-stats"
 import { faqItems } from "@/components/home-faq-data"
+import { PREMIUM_MONTHLY_INR, PRO_MONTHLY_INR } from "@/lib/pricing-inr"
+import { getServerSessionUser } from "@/lib/supabase/server-auth"
 
-export const revalidate = 3600
+/** Session is read from cookies; avoid static prerender with a single guest navbar for everyone. */
+export const dynamic = "force-dynamic"
 
-const HomeFeaturesSection = dynamic(
+const HomeFeaturesSection = nextDynamic(
   () => import("@/components/home-features").then((m) => m.HomeFeaturesSection),
   { loading: () => <div className="min-h-48 bg-[#0a0a0a]" aria-hidden /> }
 )
-const HomeForWhoSection = dynamic(
+const HomeForWhoSection = nextDynamic(
   () => import("@/components/home-for-who").then((m) => m.HomeForWhoSection),
   { loading: () => <div className="min-h-48 bg-[#0a0a0a]" aria-hidden /> }
 )
-const HomeStepsSection = dynamic(
+const HomeStepsSection = nextDynamic(
   () => import("@/components/home-steps").then((m) => m.HomeStepsSection),
   { loading: () => <div className="min-h-48 bg-[#0a0a0a]" aria-hidden /> }
 )
-const HomePricingSection = dynamic(
+const HomePricingSection = nextDynamic(
   () => import("@/components/home-pricing").then((m) => m.HomePricingSection),
   { loading: () => <div className="min-h-64 bg-[#0a0a0a]" aria-hidden /> }
 )
-const HomeTestimonialsSection = dynamic(
+const HomeTestimonialsSection = nextDynamic(
   () => import("@/components/home-testimonials").then((m) => m.HomeTestimonialsSection),
   { loading: () => <div className="min-h-48 bg-[#0a0a0a]" aria-hidden /> }
 )
-const HomeFAQSection = dynamic(
+const HomeFAQSection = nextDynamic(
   () => import("@/components/home-faq").then((m) => m.HomeFAQSection),
   { loading: () => <div className="min-h-48 bg-[#0a0a0a]" aria-hidden /> }
 )
-const HomeFooter = dynamic(
+const HomeFooter = nextDynamic(
   () => import("@/components/home-footer").then((m) => m.HomeFooter),
   { loading: () => <div className="min-h-32 bg-[#050505]" aria-hidden /> }
 )
@@ -115,14 +118,14 @@ const jsonLd = {
         {
           "@type": "Offer",
           name: "Pro",
-          price: "1999",
+          price: String(PRO_MONTHLY_INR),
           priceCurrency: "INR",
           billingIncrement: "P1M",
         },
         {
           "@type": "Offer",
           name: "Premium",
-          price: "4999",
+          price: String(PREMIUM_MONTHLY_INR),
           priceCurrency: "INR",
           billingIncrement: "P1M",
         },
@@ -160,7 +163,10 @@ const faqJsonLd = {
   })),
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getServerSessionUser()
+  const initialIsAuthenticated = Boolean(session?.user)
+
   return (
     <>
       <script
@@ -174,7 +180,7 @@ export default function HomePage() {
       <main className="min-h-screen">
         <ScrollProgress />
         <FilmGrain />
-        <Navbar />
+        <Navbar initialIsAuthenticated={initialIsAuthenticated} />
         <HomeHero />
         <HomeStats />
         <HomeFeaturesSection />

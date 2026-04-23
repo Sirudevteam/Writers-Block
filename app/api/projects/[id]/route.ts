@@ -1,13 +1,22 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { apiIpLimitOr429 } from "@/lib/api-ip-limit"
+import {
+  projectIdParamSchema,
+  projectUpdateBodySchema,
+} from "@/lib/api-schemas/project"
+import { zodErrorJsonResponse } from "@/lib/api-schemas/zod-response"
 
 const noStore = { "Cache-Control": "no-store, max-age=0" as const }
 
 // GET /api/projects/[id]
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -17,10 +26,15 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore })
   }
 
+  const idCheck = projectIdParamSchema.safeParse(params)
+  if (!idCheck.success) {
+    return zodErrorJsonResponse(idCheck.error, noStore)
+  }
+
   const { data, error } = await supabase
     .from("projects")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", idCheck.data.id)
     .eq("user_id", user.id)
     .single()
 
@@ -33,9 +47,12 @@ export async function GET(
 
 // PUT /api/projects/[id] — update a project
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -45,25 +62,39 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore })
   }
 
-  const body = await request.json()
-  const { title, description, genre, characters, location, mood, content, status } = body
+  const idCheck = projectIdParamSchema.safeParse(params)
+  if (!idCheck.success) {
+    return zodErrorJsonResponse(idCheck.error, noStore)
+  }
 
-  // Build update object with only defined fields
-  const updateData: Record<string, any> = {}
-  if (title !== undefined) updateData.title = title
-  if (description !== undefined) updateData.description = description
-  if (genre !== undefined) updateData.genre = genre
-  if (characters !== undefined) updateData.characters = characters
-  if (location !== undefined) updateData.location = location
-  if (mood !== undefined) updateData.mood = mood
-  if (content !== undefined) updateData.content = content
-  if (status !== undefined) updateData.status = status
+  let raw: unknown
+  try {
+    raw = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400, headers: noStore })
+  }
+
+  const parsed = projectUpdateBodySchema.safeParse(raw)
+  if (!parsed.success) {
+    return zodErrorJsonResponse(parsed.error, noStore)
+  }
+
+  const b = parsed.data
+  const updateData: Record<string, unknown> = {}
+  if (b.title !== undefined) updateData.title = b.title
+  if (b.description !== undefined) updateData.description = b.description
+  if (b.genre !== undefined) updateData.genre = b.genre
+  if (b.characters !== undefined) updateData.characters = b.characters
+  if (b.location !== undefined) updateData.location = b.location
+  if (b.mood !== undefined) updateData.mood = b.mood
+  if (b.content !== undefined) updateData.content = b.content
+  if (b.status !== undefined) updateData.status = b.status
   updateData.updated_at = new Date().toISOString()
 
   const { data, error } = await (supabase
     .from("projects") as any)
     .update(updateData)
-    .eq("id", params.id)
+    .eq("id", idCheck.data.id)
     .eq("user_id", user.id)
     .select()
     .single()
@@ -77,9 +108,12 @@ export async function PUT(
 
 // DELETE /api/projects/[id]
 export async function DELETE(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tooMany = await apiIpLimitOr429(request)
+  if (tooMany) return tooMany
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -89,10 +123,15 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore })
   }
 
+  const idCheck = projectIdParamSchema.safeParse(params)
+  if (!idCheck.success) {
+    return zodErrorJsonResponse(idCheck.error, noStore)
+  }
+
   const { error } = await supabase
     .from("projects")
     .delete()
-    .eq("id", params.id)
+    .eq("id", idCheck.data.id)
     .eq("user_id", user.id)
 
   if (error) {

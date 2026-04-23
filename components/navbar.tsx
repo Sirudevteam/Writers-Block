@@ -1,13 +1,14 @@
 "use client"
 
-import { motion, AnimatePresence, useScroll, useMotionValueEvent, useMotionValue, useTransform } from "framer-motion"
+import { motion, AnimatePresence, useScroll, useMotionValueEvent, useMotionValue } from "framer-motion"
 import { Film, Menu, X, Sparkles, Pen, LayoutDashboard, FolderOpen, CreditCard } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuthStatus } from "@/hooks/useAuthStatus"
 import { createClient } from "@/lib/supabase/client"
+import { signOutAction } from "@/lib/auth/actions"
 
 // Type definitions for nav links
 type NavLink = {
@@ -31,6 +32,26 @@ const authNavLinks: NavLink[] = [
   { href: "/editor", label: "Editor", icon: Pen, highlight: true },
   { href: "/dashboard/projects", label: "Projects", icon: FolderOpen },
 ]
+
+function readLocationHash() {
+  if (typeof window === "undefined") return ""
+  return window.location.hash || ""
+}
+
+/** Pathname + hash so / vs /#features vs /#pricing only one nav item is active. */
+function isNavLinkActive(href: string, pathname: string, hash: string) {
+  if (href === "/") {
+    if (pathname !== "/") return false
+    const h = hash || ""
+    return h === "" || h === "#"
+  }
+  if (href.startsWith("/#")) {
+    if (pathname !== "/") return false
+    return hash === href.slice(1)
+  }
+  if (href === "/editor") return pathname === "/editor"
+  return pathname.startsWith(href)
+}
 
 // Magnetic link component
 function MagneticLink({ 
@@ -62,10 +83,10 @@ function MagneticLink({
 
   if (highlight) {
     return (
-      <motion.div style={{ x, y }}>
+      <motion.div className="inline-flex" style={{ x, y }}>
         <Link
           href={href}
-          className={`relative text-sm font-semibold transition-colors group touch-target inline-flex items-center px-4 py-2 rounded-full bg-cinematic-orange/10 border border-cinematic-orange/30 text-cinematic-orange hover:bg-cinematic-orange/20 ${
+          className={`relative text-sm font-semibold transition-colors group inline-flex min-h-[44px] items-center rounded-full border border-cinematic-orange/30 bg-cinematic-orange/10 px-4 py-2 text-cinematic-orange hover:bg-cinematic-orange/20 ${
             active ? "bg-cinematic-orange/20" : ""
           }`}
           onMouseMove={handleMouseMove}
@@ -79,27 +100,32 @@ function MagneticLink({
   }
 
   return (
-    <motion.div style={{ x, y }}>
+    <motion.div className="inline-flex" style={{ x, y }}>
       <Link
         href={href}
-        className={`relative text-sm font-medium transition-colors group touch-target inline-flex items-center ${
+        className={`group relative inline-flex min-h-[44px] items-center text-sm font-medium ${
           active ? "text-white" : "text-muted-foreground hover:text-white"
         }`}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         aria-current={active ? "page" : undefined}
       >
-        <span className="relative z-10">{children}</span>
-        
-        {/* Active indicator */}
-        {active && (
-          <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-cinematic-orange rounded-full" aria-hidden="true" />
-        )}
-        
-        {/* Hover underline */}
-        {!active && (
-          <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-cinematic-orange to-cinematic-blue rounded-full group-hover:w-full transition-all duration-300" aria-hidden="true" />
-        )}
+        {/* Underline matches label width only (not min touch width). */}
+        <span className="relative z-10">
+          {children}
+          {active && (
+            <span
+              className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-cinematic-orange"
+              aria-hidden="true"
+            />
+          )}
+          {!active && (
+            <span
+              className="absolute -bottom-1 left-0 h-0.5 w-0 rounded-full bg-gradient-to-r from-cinematic-orange to-cinematic-blue transition-all duration-300 group-hover:w-full"
+              aria-hidden="true"
+            />
+          )}
+        </span>
       </Link>
     </motion.div>
   )
@@ -112,30 +138,78 @@ export function Navbar({
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [routeHash, setRouteHash] = useState("")
+  /** After mount, use client auth + real hash so first paint matches SSR (avoids hydration errors). */
+  const [hasMounted, setHasMounted] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
   const { isAuthenticated, loading } = useAuthStatus(initialIsAuthenticated)
   const { scrollY } = useScroll()
+
+  const syncHash = useCallback(() => setRouteHash(readLocationHash()), [])
+
+  useEffect(() => {
+    syncHash()
+    setHasMounted(true)
+  }, [syncHash])
+
+  useEffect(() => {
+    syncHash()
+  }, [pathname, syncHash])
+
+  useEffect(() => {
+    window.addEventListener("hashchange", syncHash)
+    window.addEventListener("popstate", syncHash)
+    return () => {
+      window.removeEventListener("hashchange", syncHash)
+      window.removeEventListener("popstate", syncHash)
+    }
+  }, [syncHash])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [mobileMenuOpen])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [mobileMenuOpen])
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     setScrolled(latest > 20)
   })
 
   async function handleSignOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await signOutAction()
     router.push("/")
     router.refresh()
   }
 
-  const navLinks = isAuthenticated ? authNavLinks : guestNavLinks
+  const effectiveAuthenticated = hasMounted
+    ? isAuthenticated
+    : (initialIsAuthenticated ?? false)
+  const effectiveLoading = hasMounted
+    ? loading
+    : (initialIsAuthenticated === undefined)
+  const hashForActive = hasMounted ? routeHash : ""
 
-  function isActive(href: string) {
-    if (href === "/") return pathname === "/"
-    if (href.startsWith("/#")) return pathname === "/"
-    if (href === "/editor") return pathname === "/editor"
-    return pathname.startsWith(href)
-  }
+  const navLinks = effectiveAuthenticated ? authNavLinks : guestNavLinks
+
+  const isActive = (href: string) => isNavLinkActive(href, pathname, hashForActive)
+
+  const headerSurface =
+    scrolled || mobileMenuOpen
+      ? "bg-[#0a0a0a]/80 backdrop-blur-2xl border-b border-white/10 shadow-2xl shadow-black/30"
+      : "bg-transparent"
 
   return (
     <>
@@ -143,11 +217,7 @@ export function Navbar({
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          scrolled
-            ? "bg-[#0a0a0a]/80 backdrop-blur-2xl border-b border-white/10 shadow-2xl shadow-black/30"
-            : "bg-transparent"
-        }`}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${headerSurface}`}
       >
         {/* Film strip decoration top */}
         <div className="absolute top-0 left-0 right-0 h-px overflow-hidden">
@@ -162,7 +232,7 @@ export function Navbar({
           <div className="flex items-center justify-between h-16">
 
             {/* ── Logo ─────────────────────────────────────── */}
-            <Link href={isAuthenticated ? "/dashboard" : "/"} className="flex items-center gap-2.5 group shrink-0">
+            <Link href={effectiveAuthenticated ? "/dashboard" : "/"} className="flex items-center gap-2.5 group shrink-0">
               <motion.div
                 whileHover={{ rotate: 15, scale: 1.1 }}
                 transition={{ duration: 0.3, type: "spring" }}
@@ -217,12 +287,12 @@ export function Navbar({
 
             {/* ── Desktop CTA ──────────────────────────────── */}
             <div className="hidden md:flex items-center gap-3 shrink-0">
-              {loading ? (
+              {effectiveLoading ? (
                 <div className="flex items-center gap-3" aria-hidden="true">
                   <div className="h-8 w-16 bg-white/10 rounded-md animate-pulse" />
                   <div className="h-8 w-32 bg-gradient-to-r from-white/10 to-white/5 rounded-md animate-pulse" />
                 </div>
-              ) : isAuthenticated ? (
+              ) : effectiveAuthenticated ? (
                 <>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button
@@ -328,77 +398,78 @@ export function Navbar({
 
           {/* ── Mobile Menu ──────────────────────────────────── */}
           <AnimatePresence>
-            {mobileMenuOpen && (
+            {mobileMenuOpen ? (
               <motion.div
                 id="mobile-menu"
                 key="mobile-menu"
-                initial={{ opacity: 0, height: 0, filter: "blur(10px)" }}
-                animate={{ opacity: 1, height: "auto", filter: "blur(0px)" }}
-                exit={{ opacity: 0, height: 0, filter: "blur(10px)" }}
-                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                className="md:hidden max-h-[min(70dvh,28rem)] overflow-y-auto overscroll-contain border-t border-white/10"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Site navigation"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="md:hidden max-h-[min(75dvh,32rem)] overflow-y-auto overscroll-contain border-t border-white/10 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
               >
-                <nav className="flex flex-col gap-1 py-4" aria-label="Mobile navigation">
+                <nav className="flex flex-col gap-1 py-3" aria-label="Mobile navigation">
                   {navLinks.map((link, index) => {
                     const active = isActive(link.href)
                     return (
                       <motion.div
                         key={link.href}
-                        initial={{ opacity: 0, x: -20 }}
+                        initial={{ opacity: 0, x: -12 }}
                         animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ delay: index * 0.05 }}
+                        transition={{ delay: index * 0.04, duration: 0.2 }}
                       >
                         <Link
                           href={link.href}
-                          className={`flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
+                          className={`flex w-full min-h-[48px] items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors ${
                             active
-                              ? "text-white bg-gradient-to-r from-cinematic-orange/20 to-transparent border-l-2 border-cinematic-orange"
+                              ? "border-l-2 border-cinematic-orange bg-gradient-to-r from-cinematic-orange/20 to-transparent text-white"
                               : link.highlight
-                              ? "text-cinematic-orange bg-cinematic-orange/10 border-l-2 border-cinematic-orange"
-                              : "text-muted-foreground hover:text-white hover:bg-white/5"
+                                ? "border-l-2 border-cinematic-orange bg-cinematic-orange/10 text-cinematic-orange"
+                                : "text-muted-foreground hover:bg-white/5 hover:text-white"
                           }`}
-                          onClick={() => setMobileMenuOpen(false)}
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            requestAnimationFrame(syncHash)
+                          }}
                         >
-                          {link.icon && <link.icon className="w-4 h-4" />}
-                          {active && (
-                            <motion.span
-                              layoutId="activeIndicator"
-                              className="w-1.5 h-1.5 rounded-full bg-cinematic-orange"
-                            />
-                          )}
-                          {link.label}
+                          {link.icon ? (
+                            <link.icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
+                          ) : null}
+                          <span className="min-w-0 flex-1 text-left">{link.label}</span>
                         </Link>
                       </motion.div>
                     )
                   })}
 
-                  {/* Mobile Auth */}
-                  <motion.div 
-                    className="flex flex-col gap-2 mt-3 pt-3 px-2 border-t border-white/10"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    {loading ? (
+                  <div className="mt-2 flex flex-col gap-2 border-t border-white/10 px-2 pt-4">
+                    {effectiveLoading ? (
                       <div className="flex flex-col gap-2">
-                        <div className="h-10 bg-white/10 rounded-lg animate-pulse" />
-                        <div className="h-10 bg-white/10 rounded-lg animate-pulse" />
+                        <div className="h-11 rounded-lg bg-white/10 animate-pulse" />
+                        <div className="h-11 rounded-lg bg-white/10 animate-pulse" />
                       </div>
-                    ) : isAuthenticated ? (
+                    ) : effectiveAuthenticated ? (
                       <>
                         <Button
                           variant="ghost"
-                          className="justify-start text-muted-foreground hover:text-white gap-2"
-                          onClick={() => { setMobileMenuOpen(false); router.push("/dashboard/subscription") }}
+                          className="h-12 justify-start gap-2 text-muted-foreground hover:text-white"
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            router.push("/dashboard/subscription")
+                          }}
                         >
-                          <CreditCard className="w-4 h-4" />
+                          <CreditCard className="h-4 w-4" />
                           Subscription
                         </Button>
                         <Button
                           variant="ghost"
-                          className="justify-start text-muted-foreground hover:text-white"
-                          onClick={() => { setMobileMenuOpen(false); handleSignOut() }}
+                          className="h-12 justify-start text-muted-foreground hover:text-white"
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            void handleSignOut()
+                          }}
                         >
                           Sign Out
                         </Button>
@@ -407,24 +478,30 @@ export function Navbar({
                       <>
                         <Button
                           variant="ghost"
-                          className="justify-start text-muted-foreground hover:text-white"
-                          onClick={() => { setMobileMenuOpen(false); router.push("/signin") }}
+                          className="h-12 justify-start text-muted-foreground hover:text-white"
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            router.push("/signin")
+                          }}
                         >
                           Sign In
                         </Button>
                         <Button
-                          className="bg-cinematic-orange text-black font-semibold hover:bg-cinematic-orange/90"
-                          onClick={() => { setMobileMenuOpen(false); router.push("/signup") }}
+                          className="h-12 bg-cinematic-orange font-semibold text-black hover:bg-cinematic-orange/90"
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            router.push("/signup")
+                          }}
                         >
-                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          <Sparkles className="mr-1.5 h-4 w-4" />
                           Get Started Free
                         </Button>
                       </>
                     )}
-                  </motion.div>
+                  </div>
                 </nav>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </div>
       </motion.header>

@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -29,6 +31,7 @@ const nextConfig = {
   
   // Experimental features for better performance
   experimental: {
+    instrumentationHook: true,
     // Optimize package imports for common libraries
     optimizePackageImports: [
       'lucide-react',
@@ -40,8 +43,7 @@ const nextConfig = {
     ],
     // Partial prerendering (enable when using Next.js canary)
     // ppr: true,
-    // Optimize CSS
-    optimizeCss: true,
+    // Critters (optimizeCss) can break Tailwind + keyframe bundles in some cases; keep disabled for reliable auth UI.
   },
   
   // Headers for caching and security
@@ -78,13 +80,26 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com https://va.vercel-scripts.com`,
               "frame-src https://api.razorpay.com https://checkout.razorpay.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.replicate.com https://*.upstash.io https://api.resend.com",
+              [
+                "connect-src 'self'",
+                "https://*.supabase.co",
+                "wss://*.supabase.co",
+                "https://api.replicate.com",
+                "https://*.upstash.io",
+                "https://api.resend.com",
+                "https://vitals.vercel-insights.com",
+                "https://*.vercel-insights.com",
+                "https://lottie.host",
+                "https://cdn.jsdelivr.net",
+                "https://unpkg.com",
+              ].join(" "),
               "img-src 'self' data: blob: https://img.youtube.com https://lottie.host",
               "style-src 'self' 'unsafe-inline'",
               "font-src 'self' data:",
               "media-src 'self'",
+              "worker-src 'self' blob:",
             ].join('; '),
           },
         ],
@@ -122,4 +137,14 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+const sentryBuildOptions = {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  dryRun: !process.env.SENTRY_AUTH_TOKEN,
+  tunnelRoute: '/monitoring',
+  hideSourceMaps: true,
+}
+
+module.exports = withSentryConfig(nextConfig, sentryBuildOptions)

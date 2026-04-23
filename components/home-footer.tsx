@@ -2,12 +2,21 @@
 
 import { Film, ArrowUp, Heart, Mail, MapPin } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
 
 const SIRU_AI_LABS_URL = "https://www.siruailabs.com/"
 
-const footerLinks = {
+const CONTACT_HREF =
+  process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim()
+    ? `mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`
+    : SIRU_AI_LABS_URL
+
+type FooterLink = {
+  href: string
+  label: string
+  external?: boolean
+}
+
+const footerLinks: Record<"product" | "company" | "support" | "legal", FooterLink[]> = {
   product: [
     { href: "/#features", label: "Features" },
     { href: "/editor", label: "AI Scene Generator" },
@@ -15,20 +24,20 @@ const footerLinks = {
     { href: "/#pricing", label: "Pricing" },
   ],
   company: [
-    { href: "#", label: "About Us" },
-    { href: "#", label: "Blog" },
-    { href: "#", label: "Careers" },
-    { href: "#", label: "Contact" },
+    { href: SIRU_AI_LABS_URL, label: "About Siru AI Labs", external: true },
+    { href: SIRU_AI_LABS_URL, label: "Company news", external: true },
+    { href: SIRU_AI_LABS_URL, label: "Careers", external: true },
+    { href: CONTACT_HREF, label: "Contact", external: true },
   ],
   support: [
-    { href: "#", label: "Help Center" },
-    { href: "#", label: "Documentation" },
-    { href: "#", label: "Community" },
-    { href: "#", label: "Status" },
+    { href: "/#faq", label: "Help & FAQ" },
+    { href: "/#how-it-works", label: "How it works" },
+    { href: "/signup", label: "Create account" },
+    { href: "/signin", label: "Sign in" },
   ],
   legal: [
-    { href: "#", label: "Cookie Policy" },
-    { href: "#", label: "Refund Policy" },
+    { href: "/#faq-cookies", label: "Cookies & privacy" },
+    { href: "/#faq-refunds", label: "Refunds & billing" },
   ],
 }
 
@@ -51,70 +60,38 @@ const socialLinks = [
   },
 ]
 
-function NewsletterSignup() {
-  const [email, setEmail] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSubscribed, setIsSubscribed] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email) return
-    setIsSubmitting(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsSubmitting(false)
-    setIsSubscribed(true)
-    setEmail("")
-  }
-
+function FooterStayConnected() {
   return (
-    <div className="bg-white/[0.03] rounded-xl p-5 border border-white/10">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-9 h-9 rounded-lg bg-cinematic-orange/15 flex items-center justify-center shrink-0">
-          <Mail className="w-4 h-4 text-cinematic-orange" />
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cinematic-orange/15">
+          <Mail className="h-4 w-4 text-cinematic-orange" aria-hidden />
         </div>
         <div>
-          <p className="text-sm font-semibold text-white">Stay Updated</p>
-          <p className="text-xs text-muted-foreground">Weekly tips & insights</p>
+          <p className="text-sm font-semibold text-white">Stay in the loop</p>
+          <p className="text-xs text-muted-foreground">Product &amp; company updates</p>
         </div>
       </div>
-
-      <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-        AI writing tips, new features, and Tamil cinema storytelling insights — straight to your inbox.
+      <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+        We do not run an email list from this footer yet—no fake sign-ups here. Start writing with a free account, or
+        follow Siru AI Labs for company news.
       </p>
-
-      {isSubscribed ? (
-        <div className="flex items-center gap-2 text-green-400 text-sm bg-green-500/10 rounded-lg p-3">
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-          </svg>
-          <span>Thanks for subscribing!</span>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <div className="flex flex-col gap-2 xs:flex-row">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="writer@example.com"
-              className="min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-muted-foreground transition-colors focus:border-cinematic-orange/50 focus:outline-none sm:min-h-0 sm:py-2 sm:text-sm"
-              required
-            />
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="h-11 shrink-0 rounded-lg bg-cinematic-orange px-4 font-semibold text-black hover:bg-cinematic-orange/90 disabled:opacity-50 xs:h-auto xs:min-h-[44px]"
-            >
-              {isSubmitting ? (
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              ) : (
-                "Join"
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">Join 2,000+ screenwriters. No spam.</p>
-        </form>
-      )}
+      <div className="flex flex-col gap-2">
+        <Link
+          href="/signup"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-cinematic-orange px-4 text-sm font-semibold text-black transition-colors hover:bg-cinematic-orange/90"
+        >
+          Create free account
+        </Link>
+        <a
+          href={SIRU_AI_LABS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-center text-sm text-cinematic-orange underline-offset-2 hover:underline"
+        >
+          Visit Siru AI Labs
+        </a>
+      </div>
     </div>
   )
 }
@@ -187,15 +164,28 @@ export function HomeFooter() {
                     {section.charAt(0).toUpperCase() + section.slice(1)}
                   </h3>
                   <nav aria-label={`${section} links`} className="flex flex-col gap-2.5">
-                    {footerLinks[section].map((link) => (
-                      <Link
-                        key={link.label}
-                        href={link.href}
-                        className="text-sm text-muted-foreground transition-colors hover:text-white"
-                      >
-                        {link.label}
-                      </Link>
-                    ))}
+                    {footerLinks[section].map((link) =>
+                      link.external ? (
+                        <a
+                          key={link.label}
+                          href={link.href}
+                          {...(link.href.startsWith("mailto:")
+                            ? {}
+                            : { target: "_blank" as const, rel: "noopener noreferrer" })}
+                          className="text-sm text-muted-foreground transition-colors hover:text-white"
+                        >
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link
+                          key={link.label}
+                          href={link.href}
+                          className="text-sm text-muted-foreground transition-colors hover:text-white"
+                        >
+                          {link.label}
+                        </Link>
+                      )
+                    )}
                   </nav>
                 </div>
               ))}
@@ -204,7 +194,7 @@ export function HomeFooter() {
 
           {/* Newsletter */}
           <div className="shrink-0 xl:w-[min(100%,20rem)] xl:max-w-xs">
-            <NewsletterSignup />
+            <FooterStayConnected />
           </div>
         </div>
 
@@ -212,10 +202,10 @@ export function HomeFooter() {
         <div className="mt-14 border-t border-white/[0.08] pt-10">
           <ul className="mx-auto grid max-w-4xl grid-cols-2 gap-8 md:max-w-none md:grid-cols-4 md:gap-6 lg:gap-8">
             {[
-              { value: "5,000+", label: "Screenplays Created" },
-              { value: "50+", label: "Tamil Films" },
-              { value: "99.9%", label: "Uptime" },
-              { value: "24/7", label: "AI Available" },
+              { value: "5,000+", label: "Screenwriters" },
+              { value: "50,000+", label: "Scenes generated" },
+              { value: "4.9★", label: "Average rating" },
+              { value: "2", label: "Languages — Tamil & English" },
             ].map((stat) => (
               <li key={stat.label} className="text-center md:border-l md:border-white/[0.06] md:pl-6 md:first:border-l-0 md:first:pl-0 lg:pl-8 lg:first:pl-0">
                 <div className="text-2xl font-bold tabular-nums text-white">{stat.value}</div>

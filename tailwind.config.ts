@@ -80,9 +80,25 @@ const config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
-        mono: ["var(--font-courier)", "Courier New", "monospace"],
-        display: ["var(--font-space)", "system-ui", "sans-serif"],
+        // Inter first for Latin; browser picks Noto Sans Tamil for Tamil code points.
+        sans: [
+          "var(--font-inter)",
+          "var(--font-noto-tamil)",
+          "system-ui",
+          "sans-serif",
+        ],
+        mono: [
+          "var(--font-courier)",
+          "var(--font-noto-tamil)",
+          "Courier New",
+          "monospace",
+        ],
+        display: [
+          "var(--font-space)",
+          "var(--font-noto-tamil)",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       keyframes: {
         "accordion-down": {

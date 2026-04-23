@@ -1,25 +1,22 @@
 import { redirect } from "next/navigation"
-import { DashboardAdminProvider } from "@/components/dashboard-admin-context"
-import { createClient } from "@/lib/supabase/server"
-import { isAdminEmail } from "@/lib/admin"
+import { getServerAuthUser } from "@/lib/supabase/server-auth"
+import { DashboardSidebar } from "@/components/dashboard-sidebar"
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const auth = await getServerAuthUser()
 
-  if (!user) {
+  if (!auth) {
     redirect("/signin")
   }
 
-  const showAdminLink = !!(user.email && isAdminEmail(user.email))
-
   return (
-    <DashboardAdminProvider showAdminLink={showAdminLink}>{children}</DashboardAdminProvider>
+    <div className="flex min-h-[100dvh] min-h-screen overflow-x-hidden bg-[#0a0a0a]">
+      <DashboardSidebar />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   )
 }

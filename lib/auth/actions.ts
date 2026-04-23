@@ -99,3 +99,21 @@ export async function signUpAction(
 
   return { success: true, maskedEmail: maskEmail(email) }
 }
+
+export async function signOutAction(): Promise<AuthActionState> {
+  if (!isAuthRequestOriginAllowed()) {
+    return { error: "Request could not be verified. Refresh the page and try again." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signOut()
+  if (error) {
+    return { error: mapSupabaseAuthError(error.message) }
+  }
+
+  // Ensure all shells that read auth/session re-render.
+  revalidatePath("/", "layout")
+  revalidatePath("/dashboard", "layout")
+  revalidatePath("/editor", "layout")
+  return { success: true }
+}
